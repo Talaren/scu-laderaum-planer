@@ -1,0 +1,99 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import { buildFlightPlans, planMission } from "../lib/planner.js";
+
+test("RAFT 3x32 liefert 93 SCU exakt in zwei Fluegen", () => {
+  const ship = {
+    name: "ARGO RAFT (3x32)",
+    slotCapacities: [32, 32, 32],
+    maxBoxesPerSlot: 1
+  };
+
+  const plan = planMission({
+    ship,
+    boxSizes: [32, 24, 16, 8, 4, 2, 1],
+    targetSCU: 93,
+    mode: "exact"
+  });
+
+  assert.equal(plan.reachable, true);
+  assert.equal(plan.flightsRequired, 2);
+  assert.equal(plan.deliveredSCU, 93);
+  assert.deepEqual(plan.flights.map((flight) => flight.total), [88, 5]);
+});
+
+test("RAFT 3x32 erreicht 93 SCU mit Mindestlieferung in einem Flug", () => {
+  const ship = {
+    name: "ARGO RAFT (3x32)",
+    slotCapacities: [32, 32, 32],
+    maxBoxesPerSlot: 1
+  };
+
+  const plan = planMission({
+    ship,
+    boxSizes: [32, 24, 16, 8, 4, 2, 1],
+    targetSCU: 93,
+    mode: "atLeast"
+  });
+
+  assert.equal(plan.reachable, true);
+  assert.equal(plan.flightsRequired, 1);
+  assert.equal(plan.deliveredSCU, 96);
+  assert.equal(plan.overfillSCU, 3);
+});
+
+test("flexibler Laderaum kann 93 SCU in einem Flug exakt laden", () => {
+  const ship = {
+    name: "Flex 96",
+    slotCapacities: [96],
+    maxBoxesPerSlot: null
+  };
+
+  const plan = planMission({
+    ship,
+    boxSizes: [32, 24, 16, 8, 4, 2, 1],
+    targetSCU: 93,
+    mode: "exact"
+  });
+
+  assert.equal(plan.reachable, true);
+  assert.equal(plan.flightsRequired, 1);
+  assert.equal(plan.deliveredSCU, 93);
+  assert.deepEqual(plan.flights[0].boxes, [32, 32, 24, 4, 1]);
+});
+
+test("ohne 1-SCU-Kiste ist 93 SCU exakt nicht erreichbar", () => {
+  const ship = {
+    name: "Flex 96",
+    slotCapacities: [96],
+    maxBoxesPerSlot: null
+  };
+
+  const plan = planMission({
+    ship,
+    boxSizes: [32, 24, 16, 8, 4, 2],
+    targetSCU: 93,
+    mode: "exact"
+  });
+
+  assert.equal(plan.reachable, false);
+});
+
+test("Flight plans respektieren feste Container-Slots", () => {
+  const plans = buildFlightPlans(
+    {
+      name: "ARGO RAFT (3x32)",
+      slotCapacities: [32, 32, 32],
+      maxBoxesPerSlot: 1
+    },
+    [32, 24, 16, 8, 4, 2, 1]
+  );
+
+  const plan93 = plans.get(93);
+  assert.equal(plan93, undefined);
+
+  const plan96 = plans.get(96);
+  assert.equal(plan96.total, 96);
+  assert.equal(plan96.boxCount, 3);
+});

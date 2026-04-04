@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SCU-Laderaum-Planer</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="backdrop" aria-hidden="true"></div>
+    <main class="app-shell">
+      <section class="hero">
+        <p class="eyebrow">Star Citizen Cargo Mission Planner</p>
+        <h1>SCU-Laderaum-Planer</h1>
+        <p class="hero-copy">
+          Schiff auswaehlen, Route eintragen, Kistengroessen aktivieren und sofort sehen,
+          welche Loadouts pro Flug sinnvoll sind.
+        </p>
+        <div class="hero-ribbon">
+          <span>Slots statt nur Gesamtkapazitaet</span>
+          <span>Exakt oder mindestens liefern</span>
+          <span>Direkt anpassbar fuer deinen Patch</span>
+        </div>
+      </section>
+
+      <section class="panel panel--form">
+        <form id="planner-form" novalidate>
+          <div class="section-head">
+            <h2>Flugprofil</h2>
+            <p>Vorlage waehlen und bei Bedarf anpassen.</p>
+          </div>
+
+          <div class="field-grid">
+            <label>
+              <span>Schiff</span>
+              <select id="ship-preset" name="shipPreset"></select>
+            </label>
+
+            <label>
+              <span>Anzeigename</span>
+              <input id="ship-name" name="shipName" type="text" maxlength="60">
+            </label>
+          </div>
+
+          <div class="field-grid field-grid--wide">
+            <label>
+              <span>Slot-Kapazitaeten</span>
+              <input id="slot-capacities" name="slotCapacities" type="text" placeholder="32, 32, 32">
+            </label>
+
+            <label>
+              <span>Max. Kisten pro Slot</span>
+              <input id="max-boxes-per-slot" name="maxBoxesPerSlot" type="number" min="1" step="1" placeholder="leer = flexibel">
+            </label>
+          </div>
+
+          <div class="ship-meta">
+            <span id="cargo-model" class="badge"></span>
+            <p id="ship-hint"></p>
+          </div>
+
+          <div class="section-head">
+            <h2>Mission</h2>
+            <p>Route und Sollmenge definieren.</p>
+          </div>
+
+          <div class="field-grid">
+            <label>
+              <span>Von</span>
+              <input name="source" type="text" placeholder="z. B. Port Tressler">
+            </label>
+
+            <label>
+              <span>Nach</span>
+              <input name="destination" type="text" placeholder="z. B. Area18">
+            </label>
+          </div>
+
+          <div class="field-grid">
+            <label>
+              <span>Missionsmenge</span>
+              <input name="targetSCU" type="number" min="1" step="1" value="93">
+            </label>
+
+            <label>
+              <span>Liefermodus</span>
+              <select name="deliveryMode">
+                <option value="exact">Genau liefern</option>
+                <option value="atLeast">Mindestens liefern</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="section-head">
+            <h2>Kisten</h2>
+            <p>Nur Groessen aktivieren, die auf deiner Mission wirklich verfuegbar sind.</p>
+          </div>
+
+          <div id="box-size-grid" class="box-size-grid"></div>
+
+          <div class="form-actions">
+            <button type="submit" class="button button--primary">Berechnen</button>
+            <button type="button" class="button button--ghost" id="reset-preset">Vorlage zuruecksetzen</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel panel--results">
+        <div id="result-summary" class="result-stack"></div>
+        <div id="result-alternative" class="result-stack"></div>
+        <div id="result-flights" class="flight-grid"></div>
+      </section>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
