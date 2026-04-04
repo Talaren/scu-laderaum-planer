@@ -100,7 +100,7 @@ test("Flight plans respektieren feste SCU-Slots", () => {
   assert.equal(plan97, undefined);
 });
 
-test("RAFT 6x32 trennt Ziele, wenn die Kisten nicht sauber aufteilbar sind", () => {
+test("RAFT 6x32 kann feste Missionskisten ueber mehrere Ziele kombinieren", () => {
   const manifest = planMissionManifest({
     ship: {
       name: "Argo RAFT",
@@ -115,9 +115,16 @@ test("RAFT 6x32 trennt Ziele, wenn die Kisten nicht sauber aufteilbar sind", () 
   });
 
   assert.equal(manifest.reachable, true);
-  assert.equal(manifest.flightsRequired, 3);
-  assert.deepEqual(manifest.flights.map((flight) => flight.total), [124, 93, 84]);
-  assert.deepEqual(manifest.flights.map((flight) => flight.missions[0].destination), ["Everus Harbor", "Seraphim Station", "Baijini Point"]);
+  assert.equal(manifest.flightsRequired, 2);
+  assert.deepEqual(manifest.flights.map((flight) => flight.total), [177, 124]);
+  assert.deepEqual(manifest.flights[0].missions.map((mission) => mission.destination), ["Seraphim Station", "Baijini Point"]);
+  assert.deepEqual(manifest.flights[1].missions.map((mission) => mission.destination), ["Everus Harbor"]);
+  assert.deepEqual(manifest.aggregateBoxes, [
+    { size: 16, count: 17 },
+    { size: 8, count: 2 },
+    { size: 4, count: 3 },
+    { size: 1, count: 1 }
+  ]);
 });
 
 test("Manifest ignoriert bereits abgeschlossene Missionen", () => {
@@ -207,11 +214,11 @@ test("Gemischte Fracht bleibt pro Auftrag erhalten, auch bei geteiltem Ziel", ()
 
   assert.equal(manifest.reachable, true);
   assert.equal(manifest.flightsRequired, 3);
-  assert.deepEqual(manifest.flights.map((flight) => flight.total), [136, 127, 70]);
-  assert.deepEqual(manifest.flights[1].missions.map((mission) => mission.destination), ["Melodic Fields", "Thundering Express"]);
-  assert.deepEqual(manifest.flights[1].missions.map((mission) => mission.cargo), ["Hydrogen Fuel", "Ship Ammunition"]);
-  assert.deepEqual(manifest.flights[1].missions.map((mission) => mission.boxes), [
-    [16, 16, 16, 8, 4],
+  assert.deepEqual(manifest.flights.map((flight) => flight.total), [137, 136, 60]);
+  assert.deepEqual(manifest.flights[0].missions.map((mission) => mission.destination), ["Thundering Express", "Thundering Express"]);
+  assert.deepEqual(manifest.flights[0].missions.map((mission) => mission.cargo), ["Hydrogen Fuel", "Ship Ammunition"]);
+  assert.deepEqual(manifest.flights[0].missions.map((mission) => mission.boxes), [
+    [16, 16, 16, 16, 4, 2],
     [16, 16, 16, 16, 2, 1]
   ]);
 });
@@ -268,7 +275,7 @@ test("Aufzuglimit filtert zu grosse Kisten aus der Berechnung", () => {
   assert.equal(manifest.reachable, true);
   assert.deepEqual(manifest.boxSizes, [16, 8, 4, 2, 1]);
   assert.equal(manifest.maxBoxSize, 16);
-  assert.deepEqual(manifest.flights.map((flight) => flight.total), [124, 93, 84]);
+  assert.deepEqual(manifest.flights.map((flight) => flight.total), [177, 124]);
   assert.ok(manifest.flights.every((flight) => flight.boxes.every((size) => size <= 16)));
 });
 
@@ -310,6 +317,30 @@ test("Hull C plant einen einzelnen 1723-SCU-Auftrag direkt in einem Flug", () =>
   assert.deepEqual(manifest.flights.map((flight) => flight.total), [1723]);
 });
 
+test("C2 plant einen 1723-SCU-Auftrag mit festen Missionskisten", () => {
+  const manifest = planMissionManifest({
+    ship: {
+      name: "Crusader C2 Hercules Starlifter",
+      slotCapacities: [...Array(20).fill(32), ...Array(28).fill(2)]
+    },
+    boxSizes: [32, 24, 16, 8, 4, 2, 1],
+    maxBoxSize: 32,
+    missions: [
+      { label: "Everus Harbor", destination: "Everus Harbor", cargo: "Processed Food", totalSCU: 1723 }
+    ]
+  });
+
+  assert.equal(manifest.reachable, true);
+  assert.equal(manifest.flightsRequired, 3);
+  assert.deepEqual(manifest.flights.map((flight) => flight.total), [643, 640, 440]);
+  assert.deepEqual(manifest.aggregateBoxes, [
+    { size: 32, count: 53 },
+    { size: 24, count: 1 },
+    { size: 2, count: 1 },
+    { size: 1, count: 1 }
+  ]);
+});
+
 test("RAFT kann drei kleine Ziele kombinieren und braucht fuer einen Grossauftrag einen eigenen Flug", () => {
   const manifest = planMissionManifest({
     ship: {
@@ -333,7 +364,7 @@ test("RAFT kann drei kleine Ziele kombinieren und braucht fuer einen Grossauftra
   assert.deepEqual(manifest.flights[1].missions.map((mission) => mission.destination), ["Seraphim Station", "Baijini Point", "Everus Harbor"]);
 });
 
-test("Gemeinsame Ladefluege werden nur gewaehlt, wenn sich die Kisten auf Ziele aufteilen lassen", () => {
+test("Gemeinsame Ladefluege nutzen feste Missionskisten ueber mehrere Ziele", () => {
   const manifest = planMissionManifest({
     ship: {
       name: "Test 10 SCU",
@@ -347,9 +378,9 @@ test("Gemeinsame Ladefluege werden nur gewaehlt, wenn sich die Kisten auf Ziele 
   });
 
   assert.equal(manifest.reachable, true);
-  assert.equal(manifest.flightsRequired, 2);
-  assert.deepEqual(manifest.flights.map((flight) => flight.total), [5, 5]);
-  assert.ok(manifest.flights.every((flight) => flight.missions[0].boxes.every((box) => box <= 4)));
+  assert.equal(manifest.flightsRequired, 1);
+  assert.deepEqual(manifest.flights.map((flight) => flight.total), [10]);
+  assert.deepEqual(manifest.flights[0].missions.map((mission) => mission.boxes), [[4, 1], [4, 1]]);
 });
 
 test("Share-State laesst sich per URL roundtrippen", () => {

@@ -9,6 +9,7 @@
   let currentLanguage = DEFAULT_LANGUAGE;
   let formatter = new Intl.NumberFormat("en-US");
   const flightPlanCache = new Map();
+  const slotCombinationCache = new Map();
 
   function normalizeBuildInfo(info) {
     return {
@@ -306,6 +307,32 @@
       : t("result.noBoxes");
   }
 
+  function buildGreedyMissionBoxes(targetSCU, boxSizes) {
+    const normalizedTarget = Math.trunc(Number(targetSCU));
+    if (!(normalizedTarget > 0)) {
+      return [];
+    }
+
+    const normalizedBoxSizes = normalizeBoxSizes(boxSizes);
+    const boxes = [];
+    let remainingSCU = normalizedTarget;
+
+    for (const size of normalizedBoxSizes) {
+      const count = Math.floor(remainingSCU / size);
+      if (count <= 0) {
+        continue;
+      }
+
+      for (let index = 0; index < count; index += 1) {
+        boxes.push(size);
+      }
+
+      remainingSCU -= count * size;
+    }
+
+    return remainingSCU === 0 ? sortBoxes(boxes) : null;
+  }
+
   function sortBoxes(boxes) {
     return [...boxes].sort(DESCENDING);
   }
@@ -338,6 +365,20 @@
     }
 
     return left.length - right.length;
+  }
+
+  function countsFitWithin(neededCounts, availableCounts) {
+    for (let index = 0; index < neededCounts.length; index += 1) {
+      if ((neededCounts[index] ?? 0) > (availableCounts[index] ?? 0)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  function subtractCounts(availableCounts, usedCounts) {
+    return availableCounts.map((count, index) => count - (usedCounts[index] ?? 0));
   }
 
   function isBetterLoad(candidate, current) {
@@ -384,6 +425,58 @@
     return best;
   }
 
+  function buildSlotCombinations(capacity, boxSizes) {
+    const sizes = normalizeBoxSizes(boxSizes);
+    const cacheKey = `${capacity}|${sizes.join(",")}`;
+    const cached = slotCombinationCache.get(cacheKey);
+
+    if (cached) {
+      return cached;
+    }
+
+    const counts = Array.from({ length: sizes.length }, () => 0);
+    const combinations = [];
+
+    function search(sizeIndex, remainingCapacity, total, boxCount) {
+      if (sizeIndex >= sizes.length) {
+        const boxes = expandBoxCounts(counts, sizes);
+        combinations.push({
+          total,
+          boxCount,
+          counts: [...counts],
+          boxes
+        });
+        return;
+      }
+
+      const size = sizes[sizeIndex];
+      const maxUse = Math.floor(remainingCapacity / size);
+
+      for (let use = maxUse; use >= 0; use -= 1) {
+        counts[sizeIndex] = use;
+        search(sizeIndex + 1, remainingCapacity - (use * size), total + (use * size), boxCount + use);
+      }
+
+      counts[sizeIndex] = 0;
+    }
+
+    search(0, capacity, 0, 0);
+    combinations.sort((left, right) => {
+      if (left.total !== right.total) {
+        return right.total - left.total;
+      }
+
+      if (left.boxCount !== right.boxCount) {
+        return left.boxCount - right.boxCount;
+      }
+
+      return compareNumberListsDescending(left.boxes, right.boxes);
+    });
+
+    slotCombinationCache.set(cacheKey, combinations);
+    return combinations;
+  }
+
   function cloneFlightPlan(plan) {
     return {
       total: plan.total,
@@ -408,6 +501,27 @@
   function isBetterFlightPlan(candidate, current) {
     if (!current) {
       return true;
+    }
+
+    if (candidate.boxCount !== current.boxCount) {
+      return candidate.boxCount < current.boxCount;
+    }
+
+    const boxComparison = compareNumberListsDescending(candidate.boxes, current.boxes);
+    if (boxComparison !== 0) {
+      return boxComparison < 0;
+    }
+
+    return compareSlotUsage(candidate, current) < 0;
+  }
+
+  function isBetterPackedFlight(candidate, current) {
+    if (!current) {
+      return true;
+    }
+
+    if (candidate.total !== current.total) {
+      return candidate.total > current.total;
     }
 
     if (candidate.boxCount !== current.boxCount) {
@@ -508,6 +622,200 @@
       boxes: sortBoxes(slotAssignments.flatMap((slot) => slot.boxes)),
       boxCount: finalState.boxCount,
       slotAssignments
+    };
+  }
+
+  function removeBoxes(availableBoxes, usedBoxes) {
+    const usedCounts = new Map();
+    for (const box of usedBoxes) {
+      usedCounts.set(box, (usedCounts.get(box) ?? 0) + 1);
+    }
+
+    const remainingBoxes = [];
+
+    for (const box of availableBoxes) {
+      const remaining = usedCounts.get(box) ?? 0;
+      if (remaining > 0) {
+        usedCounts.set(box, remaining - 1);
+      } else {
+        remainingBoxes.push(box);
+      }
+    }
+
+    return remainingBoxes;
+  }
+
+  function tryPackAllBoxesGreedy(ship, boxes) {
+    const normalizedShip = normalizeShip(ship);
+    const slotAssignments = normalizedShip.slotCapacities.map((capacity, index) => ({
+      slotIndex: index + 1,
+      capacity,
+      used: 0,
+      free: capacity,
+      boxes: []
+    }));
+
+    for (const box of sortBoxes(boxes)) {
+      let targetSlot = null;
+
+      for (const slot of slotAssignments) {
+        if (slot.free < box) {
+          continue;
+        }
+
+        if (!targetSlot || slot.free < targetSlot.free || (slot.free === targetSlot.free && slot.slotIndex < targetSlot.slotIndex)) {
+          targetSlot = slot;
+        }
+      }
+
+      if (!targetSlot) {
+        return null;
+      }
+
+      targetSlot.boxes.push(box);
+      targetSlot.used += box;
+      targetSlot.free -= box;
+    }
+
+    return {
+      total: sumValues(boxes),
+      boxes: sortBoxes(boxes),
+      boxCount: boxes.length,
+      slotAssignments
+    };
+  }
+
+  function packBoxesIntoFlight(ship, boxes) {
+    const normalizedShip = normalizeShip(ship);
+    const availableBoxes = sortBoxes(boxes);
+
+    if (!availableBoxes.length) {
+      return {
+        total: 0,
+        boxes: [],
+        boxCount: 0,
+        slotAssignments: normalizedShip.slotCapacities.map((capacity, index) => ({
+          slotIndex: index + 1,
+          capacity,
+          used: 0,
+          free: capacity,
+          boxes: []
+        }))
+      };
+    }
+
+    const greedyFullPlan = sumValues(availableBoxes) <= normalizedShip.totalCapacity
+      ? tryPackAllBoxesGreedy(normalizedShip, availableBoxes)
+      : null;
+
+    if (greedyFullPlan) {
+      return greedyFullPlan;
+    }
+
+    const sizes = normalizeBoxSizes(availableBoxes);
+    const initialCounts = createBoxCounts(availableBoxes, sizes);
+    const sortedSlots = normalizedShip.slotCapacities
+      .map((capacity, index) => ({ slotIndex: index + 1, capacity }))
+      .sort((left, right) => right.capacity - left.capacity || left.slotIndex - right.slotIndex);
+    const memo = new Map();
+
+    function search(slotIndex, remainingCounts) {
+      const memoKey = `${slotIndex}|${boxCountsKey(remainingCounts)}`;
+      if (memo.has(memoKey)) {
+        return memo.get(memoKey);
+      }
+
+      if (slotIndex >= sortedSlots.length) {
+        const emptyResult = {
+          total: 0,
+          boxes: [],
+          boxCount: 0,
+          slotAssignments: []
+        };
+        memo.set(memoKey, emptyResult);
+        return emptyResult;
+      }
+
+      const slot = sortedSlots[slotIndex];
+      let best = null;
+
+      for (const combination of buildSlotCombinations(slot.capacity, sizes)) {
+        if (!countsFitWithin(combination.counts, remainingCounts)) {
+          continue;
+        }
+
+        const rest = search(slotIndex + 1, subtractCounts(remainingCounts, combination.counts));
+        if (!rest) {
+          continue;
+        }
+
+        const candidate = {
+          total: combination.total + rest.total,
+          boxes: sortBoxes([...combination.boxes, ...rest.boxes]),
+          boxCount: combination.boxCount + rest.boxCount,
+          slotAssignments: [
+            {
+              slotIndex: slot.slotIndex,
+              capacity: slot.capacity,
+              used: combination.total,
+              free: slot.capacity - combination.total,
+              boxes: [...combination.boxes]
+            },
+            ...rest.slotAssignments
+          ]
+        };
+
+        if (isBetterPackedFlight(candidate, best)) {
+          best = candidate;
+        }
+      }
+
+      memo.set(memoKey, best);
+      return best;
+    }
+
+    const packed = search(0, initialCounts);
+    return {
+      total: packed?.total ?? 0,
+      boxes: sortBoxes(packed?.boxes ?? []),
+      boxCount: packed?.boxCount ?? 0,
+      slotAssignments: (packed?.slotAssignments ?? [])
+        .sort((left, right) => left.slotIndex - right.slotIndex)
+    };
+  }
+
+  function planBoxesAcrossFlights(ship, boxes) {
+    const normalizedShip = normalizeShip(ship);
+    const targetBoxes = sortBoxes(boxes);
+    const flights = [];
+    let remainingBoxes = targetBoxes;
+
+    while (remainingBoxes.length) {
+      const packedFlight = packBoxesIntoFlight(normalizedShip, remainingBoxes);
+      if (!(packedFlight.total > 0) || !packedFlight.boxes.length) {
+        return {
+          reachable: false,
+          ship: normalizedShip
+        };
+      }
+
+      flights.push({
+        number: flights.length + 1,
+        ...packedFlight
+      });
+      remainingBoxes = removeBoxes(remainingBoxes, packedFlight.boxes);
+    }
+
+    return {
+      reachable: true,
+      ship: normalizedShip,
+      exact: true,
+      deliveredSCU: sumValues(targetBoxes),
+      overfillSCU: 0,
+      missingSCU: 0,
+      flightsRequired: flights.length,
+      flights,
+      aggregateBoxes: countBoxes(targetBoxes)
     };
   }
 
@@ -675,10 +983,8 @@
       throw new Error(t("errors.needFittingBoxSize"));
     }
 
-    const flightPlans = buildFlightPlans(normalizedShip, normalizedBoxSizes);
-    const feasibleTotals = [...flightPlans.keys()].filter((total) => total > 0).sort(DESCENDING);
-
-    if (!feasibleTotals.length) {
+    const missionBoxes = buildGreedyMissionBoxes(normalizedTarget, normalizedBoxSizes);
+    if (!missionBoxes) {
       return {
         reachable: false,
         mode,
@@ -689,67 +995,8 @@
       };
     }
 
-    const maxFlightTotal = feasibleTotals[0];
-    const directFlight = flightPlans.get(normalizedTarget);
-
-    if (directFlight) {
-      return {
-        reachable: true,
-        exact: true,
-        mode,
-        ship: normalizedShip,
-        maxBoxSize: normalizedMaxBoxSize,
-        boxSizes: normalizedBoxSizes,
-        targetSCU: normalizedTarget,
-        deliveredSCU: normalizedTarget,
-        overfillSCU: 0,
-        missingSCU: 0,
-        flightsRequired: 1,
-        feasibleTotals,
-        flights: [
-          {
-            number: 1,
-            ...cloneFlightPlan(directFlight)
-          }
-        ],
-        aggregateBoxes: countBoxes(directFlight.boxes)
-      };
-    }
-
-    const limit = mode === "exact" ? normalizedTarget : normalizedTarget + maxFlightTotal;
-    const bestStates = Array.from({ length: limit + 1 }, () => null);
-    bestStates[0] = {
-      flights: 0,
-      prevTotal: null,
-      flightTotal: 0
-    };
-
-    for (let currentTotal = 0; currentTotal <= limit; currentTotal += 1) {
-      const state = bestStates[currentTotal];
-      if (!state) {
-        continue;
-      }
-
-      for (const flightTotal of feasibleTotals) {
-        const nextTotal = currentTotal + flightTotal;
-        if (nextTotal > limit) {
-          continue;
-        }
-
-        const candidate = {
-          flights: state.flights + 1,
-          prevTotal: currentTotal,
-          flightTotal
-        };
-
-        if (isBetterMissionState(candidate, bestStates[nextTotal])) {
-          bestStates[nextTotal] = candidate;
-        }
-      }
-    }
-
-    const deliveredTarget = mode === "exact" ? normalizedTarget : pickBestAtLeast(bestStates, normalizedTarget);
-    if (deliveredTarget == null || !bestStates[deliveredTarget]) {
+    const boxPlan = planBoxesAcrossFlights(normalizedShip, missionBoxes);
+    if (!boxPlan.reachable) {
       return {
         reachable: false,
         mode,
@@ -759,40 +1006,21 @@
         targetSCU: normalizedTarget
       };
     }
-
-    const flightTotals = [];
-    let cursor = deliveredTarget;
-
-    while (cursor > 0) {
-      const state = bestStates[cursor];
-      flightTotals.push(state.flightTotal);
-      cursor = state.prevTotal;
-    }
-
-    flightTotals.sort(DESCENDING);
-    const flights = flightTotals.map((flightTotal, index) => ({
-      number: index + 1,
-      ...cloneFlightPlan(flightPlans.get(flightTotal))
-    }));
-
-    const deliveredSCU = sumValues(flightTotals);
-    const aggregateBoxes = countBoxes(flights.flatMap((flight) => flight.boxes));
 
     return {
       reachable: true,
-      exact: deliveredSCU === normalizedTarget,
+      exact: true,
       mode,
       ship: normalizedShip,
       maxBoxSize: normalizedMaxBoxSize,
       boxSizes: normalizedBoxSizes,
       targetSCU: normalizedTarget,
-      deliveredSCU,
-      overfillSCU: Math.max(0, deliveredSCU - normalizedTarget),
-      missingSCU: Math.max(0, normalizedTarget - deliveredSCU),
-      flightsRequired: flights.length,
-      feasibleTotals,
-      flights,
-      aggregateBoxes
+      deliveredSCU: normalizedTarget,
+      overfillSCU: 0,
+      missingSCU: 0,
+      flightsRequired: boxPlan.flightsRequired,
+      flights: boxPlan.flights,
+      aggregateBoxes: boxPlan.aggregateBoxes
     };
   }
 
@@ -1066,12 +1294,13 @@
     const blockingMissions = [];
 
     for (const mission of activeMissions) {
-      const exactPlan = planMission({
-        ship: normalizedShip,
-        boxSizes: normalizedBoxSizes,
-        targetSCU: mission.remainingSCU,
-        mode: "exact"
-      });
+      const missionBoxes = buildGreedyMissionBoxes(mission.remainingSCU, normalizedBoxSizes);
+      if (!missionBoxes) {
+        blockingMissions.push(mission);
+        continue;
+      }
+
+      const exactPlan = planBoxesAcrossFlights(normalizedShip, missionBoxes);
 
       if (!exactPlan.reachable) {
         blockingMissions.push(mission);
@@ -1079,7 +1308,10 @@
       }
 
       if (exactPlan.flightsRequired === 1) {
-        packableMissions.push(mission);
+        packableMissions.push({
+          ...mission,
+          boxes: [...exactPlan.flights[0].boxes]
+        });
         continue;
       }
 
@@ -1092,7 +1324,8 @@
           missions: [
             {
               ...mission,
-              remainingSCU: stagedFlight.total
+              remainingSCU: stagedFlight.total,
+              boxes: [...stagedFlight.boxes]
             }
           ],
           stops: 1
@@ -1102,7 +1335,8 @@
       const finalRemainder = stagedFlights[stagedFlights.length - 1];
       packableMissions.push({
         ...mission,
-        remainingSCU: finalRemainder.total
+        remainingSCU: finalRemainder.total,
+        boxes: [...finalRemainder.boxes]
       });
     }
 
@@ -1132,6 +1366,7 @@
       for (let mask = 1; mask <= fullMask; mask += 1) {
         const subsetMissions = [];
         let totalSCU = 0;
+        let subsetBoxes = [];
 
         for (let index = 0; index < packableMissions.length; index += 1) {
           if ((mask & (1 << index)) === 0) {
@@ -1140,24 +1375,12 @@
 
           subsetMissions.push(packableMissions[index]);
           totalSCU += packableMissions[index].remainingSCU;
+          subsetBoxes = subsetBoxes.concat(packableMissions[index].boxes ?? []);
         }
 
-        const exactPlan = planMission({
-          ship: normalizedShip,
-          boxSizes: normalizedBoxSizes,
-          targetSCU: totalSCU,
-          mode: "exact"
-        });
+        const exactPlan = packBoxesIntoFlight(normalizedShip, subsetBoxes);
 
-        if (!exactPlan.reachable || exactPlan.flightsRequired !== 1) {
-          if (countBits(mask) === 1) {
-            singleMissionIssues.push(subsetMissions[0]);
-          }
-          continue;
-        }
-
-        const allocations = allocateBoxesToMissions(exactPlan.flights[0].boxes, subsetMissions);
-        if (!allocations) {
+        if (exactPlan.total !== totalSCU) {
           if (countBits(mask) === 1) {
             singleMissionIssues.push(subsetMissions[0]);
           }
@@ -1166,8 +1389,12 @@
 
         subsetPlans.set(mask, {
           totalSCU,
-          plan: exactPlan.flights[0],
-          missions: allocations,
+          plan: exactPlan,
+          missions: subsetMissions.map((mission) => ({
+            ...mission,
+            boxes: [...(mission.boxes ?? [])],
+            boxSummary: countBoxes(mission.boxes ?? [])
+          })),
           stops: subsetMissions.length
         });
       }
@@ -1817,7 +2044,7 @@
     sections.push(`
       <article class="result-card">
         <h2>${escapeHtml(t("result.activeBoxesTitle"))}</h2>
-        <p>${escapeHtml(manifest.boxSizes.map((size) => `${size} SCU`).join(", "))}</p>
+        <p>${escapeHtml(formatBoxSummary(manifest.aggregateBoxes))}</p>
         <p>${escapeHtml(cargoLiftMaxBoxSize == null
           ? t("result.liftLimit.none")
           : t("result.liftLimit.value", { size: cargoLiftMaxBoxSize }))}</p>
