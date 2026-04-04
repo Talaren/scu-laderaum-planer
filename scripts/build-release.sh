@@ -62,9 +62,9 @@ cat > "${PACKAGE_DIR}/START_HERE.txt" <<EOF
 SCU-Laderaum-Planer Standalone
 
 1. Archiv entpacken
-2. index.html im Browser oeffnen
+2. index.html im Browser öffnen
 
-Der Standalone-Build ist fuer den Direktstart ueber index.html vorbereitet.
+Der Standalone-Build ist für den Direktstart über index.html vorbereitet.
 EOF
 
 (

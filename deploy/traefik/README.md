@@ -1,12 +1,12 @@
 # Traefik Deployment
 
-Dieses Setup ist fuer eine Veröffentlichung unter einer Unterseite von `sc.wocher.eu` gedacht, konkret zum Beispiel:
+Dieses Setup ist für eine Veröffentlichung unter einer Unterseite von `sc.wocher.eu` gedacht, konkret zum Beispiel:
 
 - `https://sc.wocher.eu/scu-planer/`
 
 Der Ablauf ist bewusst zweistufig:
 
-1. `update-release.sh` prueft die neueste GitHub-Release-Version, laedt das Standalone-Archiv lokal herunter und entpackt es nach `deploy/traefik/runtime/current/`.
+1. `update-release.sh` prüft die neueste GitHub-Release-Version, lädt das Standalone-Archiv lokal herunter und entpackt es nach `deploy/traefik/runtime/current/`.
 2. `docker-compose.yml` startet einen kleinen `nginx`-Container hinter Traefik, der genau diesen lokalen Stand ausliefert.
 
 ## Vorbereitung
@@ -28,7 +28,7 @@ Wichtig:
 - `TRAEFIK_NETWORK` muss zum `--providers.docker.network` von Traefik passen.
 - In deiner Konfiguration ist das `proxy`.
 - Mit `docker network ls` findest du die vorhandenen Netzwerke.
-- Wenn dein Traefik selbst mit `network_mode: host` laeuft, ist das fuer dieses Setup in Ordnung. Entscheidend ist trotzdem das Docker-Netzwerk aus `--providers.docker.network`, also hier `proxy`.
+- Wenn dein Traefik selbst mit `network_mode: host` läuft, ist das für dieses Setup in Ordnung. Entscheidend ist trotzdem das Docker-Netzwerk aus `--providers.docker.network`, also hier `proxy`.
 
 ## Erstes Deployment
 
@@ -39,7 +39,7 @@ cd /home/rainerw/git/scu-laderaum-planer/deploy/traefik
 
 Das Skript:
 
-- laedt die neueste Release-Version von GitHub
+- lädt die neueste Release-Version von GitHub
 - entpackt sie lokal nach `runtime/current/`
 - startet oder aktualisiert danach den Web-Container
 
@@ -63,18 +63,18 @@ Danach in `/etc/default/scu-laderaum-planer-update` den echten Deploy-Pfad setze
 DEPLOY_DIR=/home/rainerw/scu-laderaum-planer/deploy/traefik
 ```
 
-Der Timer ruft regelmaessig `deploy-latest.sh` auf. Damit werden neue Releases heruntergeladen und der Container zugleich sauber mit dem aktuellen Stand abgeglichen.
+Der Timer ruft regelmäßig `deploy-latest.sh` auf. Damit werden neue Releases heruntergeladen und der Container zugleich sauber mit dem aktuellen Stand abgeglichen.
 
 ## Fehlerbehebung
 
 Wenn `./deploy-latest.sh` mit `network ... declared as external, but could not be found` scheitert:
 
-1. `docker network ls` ausfuehren
+1. `docker network ls` ausführen
 2. das Netzwerk suchen, das dein Traefik nutzt
 3. `TRAEFIK_NETWORK` in `.env` auf genau diesen Namen setzen
 4. `./deploy-latest.sh` erneut starten
 
-Wenn `docker compose` eine Orphan-Warnung fuer den Traefik-Container zeigt:
+Wenn `docker compose` eine Orphan-Warnung für den Traefik-Container zeigt:
 
 - nicht `--remove-orphans` verwenden
 - stattdessen die aktualisierte Compose-Datei aus diesem Repo holen
@@ -83,5 +83,5 @@ Wenn `docker compose` eine Orphan-Warnung fuer den Traefik-Container zeigt:
 ## Wichtige Hinweise
 
 - Die Traefik-Regeln behandeln sowohl `${APP_PATH_PREFIX}` als auch `${APP_PATH_PREFIX}/`. Der genaue Pfad ohne Slash wird auf die Slash-Variante umgeleitet.
-- Das interne `nginx` setzt die Sicherheits-Header fuer CSP, Referrer, MIME-Sniffing und Framing.
-- Fuer oeffentliche Repos reicht unauthentischer GitHub-API-Zugriff meist aus. Wenn du Rate-Limits vermeiden willst, setze `GITHUB_TOKEN` in `.env`.
+- Das interne `nginx` setzt die Sicherheits-Header für CSP, Referrer, MIME-Sniffing und Framing.
+- Für öffentliche Repos reicht unauthentischer GitHub-API-Zugriff meist aus. Wenn du Rate-Limits vermeiden willst, setze `GITHUB_TOKEN` in `.env`.
