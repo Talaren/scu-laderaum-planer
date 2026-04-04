@@ -301,7 +301,10 @@
   }
 
   function formatBoxSummary(input) {
-    const groups = input.length && typeof input[0] === "number" ? countBoxes(input) : input;
+    const normalizedInput = Array.isArray(input) ? input : [];
+    const groups = normalizedInput.length && typeof normalizedInput[0] === "number"
+      ? countBoxes(normalizedInput)
+      : normalizedInput;
     return groups.length
       ? groups.map(({ size, count }) => `${count}x ${size} SCU`).join(", ")
       : t("result.noBoxes");
@@ -1285,7 +1288,10 @@
         boxSizes: normalizedBoxSizes,
         ...manifest,
         reason: "max-box-size-too-large",
-        blockingMissions: activeMissions
+        blockingMissions: activeMissions,
+        flightsRequired: 0,
+        flights: [],
+        aggregateBoxes: []
       };
     }
 

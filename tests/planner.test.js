@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { applyFlightDelivery, buildFlightPlans, describeSlotCapacities, planMission, planMissionManifest, sumValues } from "../lib/planner.js";
+import { applyFlightDelivery, buildFlightPlans, describeSlotCapacities, formatBoxSummary, planMission, planMissionManifest, sumValues } from "../lib/planner.js";
 import { buildShareUrl, readShareStateFromUrl } from "../lib/share-state.js";
 import { SHIP_PRESETS, getShipPresetById } from "../data/ships.js";
 
@@ -296,7 +296,14 @@ test("Zu kleines Schiff blockiert Auftraege mit groesserer Aufzugkiste", () => {
   assert.equal(manifest.reason, "max-box-size-too-large");
   assert.deepEqual(manifest.boxSizes, [16, 8, 4, 2, 1]);
   assert.equal(manifest.maxLoadableContainerSize, 4);
+  assert.equal(manifest.flightsRequired, 0);
+  assert.deepEqual(manifest.flights, []);
+  assert.deepEqual(manifest.aggregateBoxes, []);
   assert.deepEqual(manifest.blockingMissions.map((mission) => mission.destination), ["Port Tressler"]);
+});
+
+test("formatBoxSummary bleibt bei undefinierten Boxdaten stabil", () => {
+  assert.equal(formatBoxSummary(undefined), "keine Kisten");
 });
 
 test("Hull C plant einen einzelnen 1723-SCU-Auftrag direkt in einem Flug", () => {
