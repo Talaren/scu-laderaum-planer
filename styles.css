@@ -263,6 +263,11 @@ select:focus {
   gap: 12px;
 }
 
+.form-actions--compact {
+  margin-top: 0;
+  margin-bottom: 14px;
+}
+
 .button {
   border: 0;
   border-radius: 999px;
@@ -289,6 +294,49 @@ select:focus {
 .result-stack {
   display: grid;
   gap: 14px;
+}
+
+.mission-list,
+.manifest-list {
+  display: grid;
+  gap: 12px;
+}
+
+.mission-row {
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(49, 81, 93, 0.12);
+  background: rgba(255, 252, 247, 0.82);
+}
+
+.mission-row__grid {
+  display: grid;
+  grid-template-columns: 1.45fr 0.55fr 0.55fr 0.6fr;
+  gap: 12px;
+  align-items: end;
+}
+
+.mission-row__meta {
+  min-height: 100%;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(49, 81, 93, 0.06);
+  display: grid;
+  gap: 6px;
+}
+
+.mission-row__meta strong {
+  font-size: 1.1rem;
+}
+
+.mission-row__actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.mission-row__remove {
+  padding: 10px 14px;
 }
 
 .result-card,
@@ -371,6 +419,20 @@ select:focus {
   gap: 10px;
 }
 
+.manifest-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 14px;
+}
+
+.manifest-list li {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(200, 107, 19, 0.08);
+}
+
 .slot-list li {
   display: grid;
   gap: 4px;
@@ -413,7 +475,8 @@ select:focus {
 
   .field-grid,
   .field-grid--wide,
-  .metric-grid {
+  .metric-grid,
+  .mission-row__grid {
     grid-template-columns: 1fr;
   }
 

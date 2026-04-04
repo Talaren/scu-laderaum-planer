@@ -2,6 +2,14 @@ export const DEFAULT_BOX_SIZES = [32, 24, 16, 8, 4, 2, 1];
 
 export const SHIP_PRESETS = [
   {
+    id: "raft-mission-6x32",
+    name: "ARGO RAFT (6x32 Missionscargo)",
+    slotCapacities: [32, 32, 32, 32, 32, 32],
+    maxBoxesPerSlot: null,
+    cargoModel: "6 flexible 32-SCU-Slots",
+    note: "Praktischer RAFT-Preset fuer Frachtmissionen, bei denen maximal 16-SCU-Kisten aus dem Aufzug kommen."
+  },
+  {
     id: "raft-classic",
     name: "ARGO RAFT (3x32)",
     slotCapacities: [32, 32, 32],

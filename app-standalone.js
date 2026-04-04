@@ -1,7 +1,19 @@
 (function () {
   const DEFAULT_BOX_SIZES = [32, 24, 16, 8, 4, 2, 1];
+  const STORAGE_KEY = "scu-laderaum-planer:v2";
+  const DESCENDING = (left, right) => right - left;
+  const ASCENDING = (left, right) => left - right;
+  const formatter = new Intl.NumberFormat("de-DE");
 
   const SHIP_PRESETS = [
+    {
+      id: "raft-mission-6x32",
+      name: "ARGO RAFT (6x32 Missionscargo)",
+      slotCapacities: [32, 32, 32, 32, 32, 32],
+      maxBoxesPerSlot: null,
+      cargoModel: "6 flexible 32-SCU-Slots",
+      note: "Praktischer RAFT-Preset fuer Frachtmissionen, bei denen maximal 16-SCU-Kisten aus dem Aufzug kommen."
+    },
     {
       id: "raft-classic",
       name: "ARGO RAFT (3x32)",
@@ -63,8 +75,6 @@
   function getShipPresetById(presetId) {
     return SHIP_PRESETS.find((preset) => preset.id === presetId) ?? SHIP_PRESETS[0];
   }
-
-  const DESCENDING = (left, right) => right - left;
 
   function sumValues(values) {
     return values.reduce((sum, value) => sum + value, 0);
@@ -139,6 +149,21 @@
 
       if (leftValue !== rightValue) {
         return rightValue - leftValue;
+      }
+    }
+
+    return left.length - right.length;
+  }
+
+  function compareNumberListsAscending(left, right) {
+    const maxLength = Math.max(left.length, right.length);
+
+    for (let index = 0; index < maxLength; index += 1) {
+      const leftValue = left[index] ?? Number.POSITIVE_INFINITY;
+      const rightValue = right[index] ?? Number.POSITIVE_INFINITY;
+
+      if (leftValue !== rightValue) {
+        return leftValue - rightValue;
       }
     }
 
@@ -415,8 +440,259 @@
     };
   }
 
-  const STORAGE_KEY = "scu-laderaum-planer:v1";
-  const formatter = new Intl.NumberFormat("de-DE");
+  function normalizeMissionEntry(mission, index) {
+    const totalSCU = Math.trunc(Number(mission.totalSCU ?? mission.targetSCU ?? mission.amountSCU));
+    const deliveredSCU = Math.max(0, Math.trunc(Number(mission.deliveredSCU ?? 0)));
+
+    if (!(totalSCU > 0)) {
+      throw new Error(`Auftrag ${index + 1} braucht eine Gesamtmenge groesser als 0 SCU.`);
+    }
+
+    if (deliveredSCU > totalSCU) {
+      throw new Error(`Auftrag ${index + 1} hat mehr geliefert als insgesamt benoetigt.`);
+    }
+
+    return {
+      id: mission.id ?? `mission-${index + 1}`,
+      label: mission.label?.trim() || `Auftrag ${index + 1}`,
+      cargo: mission.cargo?.trim() || "",
+      source: mission.source?.trim() || "",
+      destination: mission.destination?.trim() || `Ziel ${index + 1}`,
+      totalSCU,
+      deliveredSCU,
+      remainingSCU: totalSCU - deliveredSCU
+    };
+  }
+
+  function normalizeMissionEntries(missions) {
+    const normalized = missions.map(normalizeMissionEntry);
+    const activeMissions = normalized.filter((mission) => mission.remainingSCU > 0);
+    const completedMissions = normalized.filter((mission) => mission.remainingSCU === 0);
+
+    return {
+      missions: normalized,
+      activeMissions,
+      completedMissions,
+      totalSCU: sumValues(normalized.map((mission) => mission.totalSCU)),
+      deliveredSCU: sumValues(normalized.map((mission) => mission.deliveredSCU)),
+      remainingSCU: sumValues(normalized.map((mission) => mission.remainingSCU))
+    };
+  }
+
+  function countBits(mask) {
+    let value = mask;
+    let count = 0;
+
+    while (value > 0) {
+      count += value & 1;
+      value >>= 1;
+    }
+
+    return count;
+  }
+
+  function buildSortedProfile(profile, value, sorter = DESCENDING) {
+    return [...profile, value].sort(sorter);
+  }
+
+  function isBetterManifestState(candidate, current) {
+    if (!current) {
+      return true;
+    }
+
+    if (candidate.flights !== current.flights) {
+      return candidate.flights < current.flights;
+    }
+
+    const loadComparison = compareNumberListsDescending(candidate.loadProfile, current.loadProfile);
+    if (loadComparison !== 0) {
+      return loadComparison < 0;
+    }
+
+    return compareNumberListsAscending(candidate.stopProfile, current.stopProfile) < 0;
+  }
+
+  function planMissionManifest({ ship, boxSizes, missions }) {
+    const normalizedShip = normalizeShip(ship);
+    const normalizedBoxSizes = normalizeBoxSizes(boxSizes);
+    if (!normalizedBoxSizes.length) {
+      throw new Error("Mindestens eine Kistengroesse muss aktiviert sein.");
+    }
+
+    const manifest = normalizeMissionEntries(missions);
+    const activeMissions = manifest.activeMissions;
+
+    if (!activeMissions.length) {
+      return {
+        reachable: true,
+        ship: normalizedShip,
+        boxSizes: normalizedBoxSizes,
+        ...manifest,
+        flightsRequired: 0,
+        flights: [],
+        aggregateBoxes: []
+      };
+    }
+
+    if (activeMissions.length > 15) {
+      throw new Error("Maximal 15 offene Auftraege gleichzeitig unterstuetzt.");
+    }
+
+    const subsetPlans = new Map();
+    const singleMissionIssues = [];
+    const fullMask = (1 << activeMissions.length) - 1;
+
+    for (let mask = 1; mask <= fullMask; mask += 1) {
+      const subsetMissions = [];
+      let totalSCU = 0;
+
+      for (let index = 0; index < activeMissions.length; index += 1) {
+        if ((mask & (1 << index)) === 0) {
+          continue;
+        }
+
+        subsetMissions.push(activeMissions[index]);
+        totalSCU += activeMissions[index].remainingSCU;
+      }
+
+      const exactPlan = planMission({
+        ship: normalizedShip,
+        boxSizes: normalizedBoxSizes,
+        targetSCU: totalSCU,
+        mode: "exact"
+      });
+
+      if (!exactPlan.reachable || exactPlan.flightsRequired !== 1) {
+        if (countBits(mask) === 1) {
+          singleMissionIssues.push(subsetMissions[0]);
+        }
+        continue;
+      }
+
+      subsetPlans.set(mask, {
+        totalSCU,
+        plan: exactPlan.flights[0],
+        missions: subsetMissions,
+        stops: subsetMissions.length
+      });
+    }
+
+    if (singleMissionIssues.length) {
+      return {
+        reachable: false,
+        ship: normalizedShip,
+        boxSizes: normalizedBoxSizes,
+        ...manifest,
+        reason: "single-mission-unreachable",
+        blockingMissions: singleMissionIssues
+      };
+    }
+
+    const validMasks = [...subsetPlans.keys()];
+    const bestStates = Array.from({ length: fullMask + 1 }, () => null);
+    bestStates[0] = {
+      flights: 0,
+      prevMask: null,
+      subsetMask: 0,
+      loadProfile: [],
+      stopProfile: []
+    };
+
+    for (let mask = 0; mask <= fullMask; mask += 1) {
+      const current = bestStates[mask];
+      if (!current) {
+        continue;
+      }
+
+      for (const subsetMask of validMasks) {
+        if ((mask & subsetMask) !== 0) {
+          continue;
+        }
+
+        const nextMask = mask | subsetMask;
+        const subset = subsetPlans.get(subsetMask);
+        const candidate = {
+          flights: current.flights + 1,
+          prevMask: mask,
+          subsetMask,
+          loadProfile: buildSortedProfile(current.loadProfile, subset.totalSCU),
+          stopProfile: buildSortedProfile(current.stopProfile, subset.stops, ASCENDING)
+        };
+
+        if (isBetterManifestState(candidate, bestStates[nextMask])) {
+          bestStates[nextMask] = candidate;
+        }
+      }
+    }
+
+    const finalState = bestStates[fullMask];
+    if (!finalState) {
+      return {
+        reachable: false,
+        ship: normalizedShip,
+        boxSizes: normalizedBoxSizes,
+        ...manifest,
+        reason: "manifest-unreachable"
+      };
+    }
+
+    const selectedFlights = [];
+    let cursorMask = fullMask;
+
+    while (cursorMask > 0) {
+      const state = bestStates[cursorMask];
+      selectedFlights.push(subsetPlans.get(state.subsetMask));
+      cursorMask = state.prevMask;
+    }
+
+    selectedFlights.sort((left, right) => right.totalSCU - left.totalSCU);
+    const flights = selectedFlights.map((flight, index) => ({
+      number: index + 1,
+      total: flight.plan.total,
+      boxes: [...flight.plan.boxes],
+      boxCount: flight.plan.boxCount,
+      slotAssignments: flight.plan.slotAssignments.map((slot) => ({
+        slotIndex: slot.slotIndex,
+        capacity: slot.capacity,
+        used: slot.used,
+        free: slot.free,
+        boxes: [...slot.boxes]
+      })),
+      missions: flight.missions.map((mission) => ({
+        id: mission.id,
+        label: mission.label,
+        cargo: mission.cargo,
+        source: mission.source,
+        destination: mission.destination,
+        remainingSCU: mission.remainingSCU
+      }))
+    }));
+
+    return {
+      reachable: true,
+      ship: normalizedShip,
+      boxSizes: normalizedBoxSizes,
+      ...manifest,
+      flightsRequired: flights.length,
+      flights,
+      aggregateBoxes: countBoxes(flights.flatMap((flight) => flight.boxes))
+    };
+  }
+
+  const DEFAULT_EXAMPLE = {
+    presetId: "raft-mission-6x32",
+    shipName: "ARGO RAFT (6x32 Missionscargo)",
+    slotCapacities: "32, 32, 32, 32, 32, 32",
+    maxBoxesPerSlot: "",
+    source: "MIC-L1 Shallow Frontier Station",
+    cargoName: "Quartz",
+    boxSizes: [16, 8, 4, 2, 1],
+    missions: [
+      { id: "mission-1", destination: "Everus Harbor oberhalb von Hurston", totalSCU: 124, deliveredSCU: 0 },
+      { id: "mission-2", destination: "Seraphim-Station oberhalb von Crusader", totalSCU: 93, deliveredSCU: 0 },
+      { id: "mission-3", destination: "Baijini-Point oberhalb von ArcCorp", totalSCU: 84, deliveredSCU: 0 }
+    ]
+  };
 
   const form = document.querySelector("#planner-form");
   const presetSelect = document.querySelector("#ship-preset");
@@ -425,13 +701,14 @@
   const maxBoxesInput = document.querySelector("#max-boxes-per-slot");
   const cargoModelBadge = document.querySelector("#cargo-model");
   const shipHint = document.querySelector("#ship-hint");
+  const missionList = document.querySelector("#mission-list");
   const boxSizeContainer = document.querySelector("#box-size-grid");
   const resultSummary = document.querySelector("#result-summary");
   const resultFlights = document.querySelector("#result-flights");
   const resultAlternative = document.querySelector("#result-alternative");
 
   function escapeHtml(value) {
-    return value
+    return String(value)
       .replaceAll("&", "&amp;")
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;")
@@ -440,12 +717,6 @@
 
   function formatInteger(value) {
     return formatter.format(Math.trunc(value));
-  }
-
-  function formatRoute(source, destination) {
-    const from = source?.trim() || "Start offen";
-    const to = destination?.trim() || "Ziel offen";
-    return `${from} -> ${to}`;
   }
 
   function populatePresetOptions() {
@@ -468,12 +739,75 @@
       .join("");
   }
 
-  function applyPreset(presetId, keepRoute = true) {
+  function createMissionDraft(row = {}) {
+    return {
+      id: row.id ?? `mission-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      destination: row.destination ?? "",
+      totalSCU: row.totalSCU ?? "",
+      deliveredSCU: row.deliveredSCU ?? 0
+    };
+  }
+
+  function renderMissionRows(rows) {
+    missionList.innerHTML = rows
+      .map((row, index) => {
+        const totalSCU = Number(row.totalSCU) || 0;
+        const deliveredSCU = Number(row.deliveredSCU) || 0;
+        const remainingSCU = Math.max(0, totalSCU - deliveredSCU);
+
+        return `
+          <article class="mission-row" data-mission-id="${escapeHtml(row.id)}">
+            <div class="mission-row__grid">
+              <label>
+                <span>Ziel ${index + 1}</span>
+                <input type="text" name="mission-destination" value="${escapeHtml(row.destination)}" placeholder="z. B. Seraphim-Station">
+              </label>
+              <label>
+                <span>Gesamt-SCU</span>
+                <input type="number" name="mission-total" min="0" step="1" value="${escapeHtml(row.totalSCU)}" placeholder="93">
+              </label>
+              <label>
+                <span>Geliefert</span>
+                <input type="number" name="mission-delivered" min="0" step="1" value="${escapeHtml(row.deliveredSCU)}" placeholder="0">
+              </label>
+              <div class="mission-row__meta">
+                <span>Offen</span>
+                <strong data-role="remaining">${formatInteger(remainingSCU)} SCU</strong>
+              </div>
+            </div>
+            <div class="mission-row__actions">
+              <button type="button" class="button button--ghost mission-row__remove" data-action="remove-mission">Entfernen</button>
+            </div>
+          </article>
+        `;
+      })
+      .join("");
+  }
+
+  function readMissionRowsFromDom() {
+    return [...missionList.querySelectorAll(".mission-row")].map((row) => ({
+      id: row.dataset.missionId,
+      destination: row.querySelector('input[name="mission-destination"]').value.trim(),
+      totalSCU: row.querySelector('input[name="mission-total"]').value,
+      deliveredSCU: row.querySelector('input[name="mission-delivered"]').value
+    }));
+  }
+
+  function updateMissionRowMeta(rowElement) {
+    const totalInput = rowElement.querySelector('input[name="mission-total"]');
+    const deliveredInput = rowElement.querySelector('input[name="mission-delivered"]');
+    const remainingElement = rowElement.querySelector('[data-role="remaining"]');
+    const totalSCU = Math.max(0, Number.parseInt(totalInput.value || "0", 10) || 0);
+    const deliveredSCU = Math.max(0, Number.parseInt(deliveredInput.value || "0", 10) || 0);
+    const remainingSCU = Math.max(0, totalSCU - deliveredSCU);
+    remainingElement.textContent = `${formatInteger(remainingSCU)} SCU`;
+  }
+
+  function applyPreset(presetId, keepMissionData = true) {
     const preset = getShipPresetById(presetId);
-    const routeValues = keepRoute ? {
+    const savedMissionData = keepMissionData ? {
       source: form.elements.source.value,
-      destination: form.elements.destination.value,
-      targetSCU: form.elements.targetSCU.value
+      cargoName: form.elements.cargoName.value
     } : null;
 
     presetSelect.value = preset.id;
@@ -484,10 +818,9 @@
     cargoModelBadge.textContent = preset.cargoModel;
     shipHint.textContent = preset.note;
 
-    if (routeValues) {
-      form.elements.source.value = routeValues.source;
-      form.elements.destination.value = routeValues.destination;
-      form.elements.targetSCU.value = routeValues.targetSCU;
+    if (savedMissionData) {
+      form.elements.source.value = savedMissionData.source;
+      form.elements.cargoName.value = savedMissionData.cargoName;
     }
   }
 
@@ -506,6 +839,22 @@
 
   function collectMissionInput() {
     const selectedPreset = getShipPresetById(presetSelect.value);
+    const source = form.elements.source.value.trim();
+    const cargoName = form.elements.cargoName.value.trim();
+    const missionRows = readMissionRowsFromDom();
+
+    const missions = missionRows
+      .filter((row) => row.destination || row.totalSCU || row.deliveredSCU)
+      .map((row, index) => ({
+        id: row.id,
+        label: row.destination || `Auftrag ${index + 1}`,
+        source,
+        destination: row.destination,
+        cargo: cargoName,
+        totalSCU: Number.parseInt(row.totalSCU, 10),
+        deliveredSCU: Number.parseInt(row.deliveredSCU || "0", 10) || 0
+      }));
+
     return {
       presetId: selectedPreset.id,
       ship: {
@@ -516,12 +865,9 @@
         slotCapacities: parseSlotCapacities(slotCapacitiesInput.value),
         maxBoxesPerSlot: maxBoxesInput.value.trim() === "" ? null : Number.parseInt(maxBoxesInput.value, 10)
       },
-      mission: {
-        source: form.elements.source.value.trim(),
-        destination: form.elements.destination.value.trim(),
-        targetSCU: Number.parseInt(form.elements.targetSCU.value, 10),
-        mode: form.elements.deliveryMode.value
-      },
+      cargoName,
+      source,
+      missions,
       boxSizes: getSelectedBoxSizes()
     };
   }
@@ -550,18 +896,48 @@
     shipHint.textContent = baseNote ? `${baseNote} ${details}` : details;
   }
 
-  function renderError(message) {
+  function renderError(message, details = "") {
     resultSummary.innerHTML = `
       <article class="result-card result-card--alert">
         <h2>Berechnung blockiert</h2>
         <p>${escapeHtml(message)}</p>
+        ${details ? `<p>${escapeHtml(details)}</p>` : ""}
       </article>
     `;
     resultFlights.innerHTML = "";
-    resultAlternative.innerHTML = "";
   }
 
-  function renderFlightCard(flight) {
+  function renderCompletedMissions(manifest, source, cargoName) {
+    const sections = [];
+
+    if (manifest.completedMissions.length) {
+      sections.push(`
+        <article class="result-card">
+          <h2>Bereits erledigt</h2>
+          <ul class="manifest-list">
+            ${manifest.completedMissions.map((mission) => `
+              <li>
+                <strong>${escapeHtml(mission.destination)}</strong>
+                <span>${formatInteger(mission.totalSCU)} SCU abgeschlossen</span>
+                <span>${escapeHtml(cargoName || mission.cargo || "Fracht")} von ${escapeHtml(source || mission.source || "Pickup offen")}</span>
+              </li>
+            `).join("")}
+          </ul>
+        </article>
+      `);
+    }
+
+    sections.push(`
+      <article class="result-card">
+        <h2>Aktive Kisten</h2>
+        <p>${escapeHtml(manifest.boxSizes.map((size) => `${size} SCU`).join(", "))}</p>
+      </article>
+    `);
+
+    resultAlternative.innerHTML = sections.join("");
+  }
+
+  function renderFlightCard(flight, cargoName, source) {
     const slotList = flight.slotAssignments
       .map((slot) => `
         <li>
@@ -572,69 +948,88 @@
       `)
       .join("");
 
+    const missionListMarkup = flight.missions
+      .map((mission) => `
+        <li>
+          <strong>${escapeHtml(mission.destination)}</strong>
+          <span>${formatInteger(mission.remainingSCU)} SCU</span>
+          <span>${escapeHtml(cargoName || mission.cargo || "Fracht")} ab ${escapeHtml(source || mission.source || "Pickup offen")}</span>
+        </li>
+      `)
+      .join("");
+
     return `
       <article class="flight-card">
         <header>
-          <p class="flight-index">Flug ${flight.number}</p>
+          <p class="flight-index">Ladeflug ${flight.number}</p>
           <h3>${formatInteger(flight.total)} SCU</h3>
         </header>
-        <p class="flight-boxes">${formatBoxSummary(flight.boxes)}</p>
+        <p class="flight-boxes">Boxen: ${escapeHtml(formatBoxSummary(flight.boxes))}</p>
+        <ul class="manifest-list">${missionListMarkup}</ul>
         <ul class="slot-list">${slotList}</ul>
       </article>
     `;
   }
 
-  function renderPlan(plan, mission, leadText) {
-    const route = formatRoute(mission.source, mission.destination);
-    const overfillLabel = plan.overfillSCU > 0 ? `+${formatInteger(plan.overfillSCU)} SCU Ueberlieferung` : "keine Ueberlieferung";
+  function renderManifestPlan(plan, source, cargoName) {
+    const activeDestinations = plan.activeMissions.length;
+    const completedDestinations = plan.completedMissions.length;
 
     resultSummary.innerHTML = `
       <article class="result-card">
         <div class="mission-strip">
-          <span class="route-pill">${escapeHtml(route)}</span>
+          <span class="route-pill">${escapeHtml(source || "Pickup offen")}</span>
           <span class="route-pill route-pill--accent">${escapeHtml(plan.ship.name)}</span>
         </div>
-        <h2>${escapeHtml(leadText)}</h2>
-        <p>${plan.mode === "exact" ? "Exakte Lieferung" : "Lieferung mindestens"} fuer ${formatInteger(plan.targetSCU)} SCU.</p>
+        <h2>Auftrags-Manifest</h2>
+        <p>${escapeHtml(cargoName || "Fracht")} mit ${formatInteger(plan.remainingSCU)} offenen SCU ueber ${formatInteger(activeDestinations)} aktive Ziele.</p>
         <div class="metric-grid">
           <div>
-            <span>Fluege</span>
+            <span>Ladefluege</span>
             <strong>${formatInteger(plan.flightsRequired)}</strong>
           </div>
           <div>
-            <span>Geliefert</span>
-            <strong>${formatInteger(plan.deliveredSCU)} SCU</strong>
+            <span>Offen</span>
+            <strong>${formatInteger(plan.remainingSCU)} SCU</strong>
           </div>
           <div>
-            <span>Slots</span>
-            <strong>${escapeHtml(describeSlotCapacities(plan.ship.slotCapacities))}</strong>
+            <span>Aktive Ziele</span>
+            <strong>${formatInteger(activeDestinations)}</strong>
           </div>
           <div>
-            <span>Delta</span>
-            <strong>${escapeHtml(overfillLabel)}</strong>
+            <span>Erledigt</span>
+            <strong>${formatInteger(completedDestinations)}</strong>
           </div>
         </div>
         <p class="aggregate-boxes">Gesamt laden: ${escapeHtml(formatBoxSummary(plan.aggregateBoxes))}</p>
       </article>
     `;
 
-    resultFlights.innerHTML = plan.flights.map(renderFlightCard).join("");
+    resultFlights.innerHTML = plan.flights
+      .map((flight) => renderFlightCard(flight, cargoName, source))
+      .join("");
+
+    renderCompletedMissions(plan, source, cargoName);
   }
 
-  function renderAlternativePlan(plan) {
-    if (!plan?.reachable) {
-      resultAlternative.innerHTML = "";
-      return;
-    }
+  function renderBlockedManifest(plan) {
+    const blockingList = plan.blockingMissions?.length
+      ? plan.blockingMissions.map((mission) => `${mission.destination}: ${mission.remainingSCU} SCU`).join(", ")
+      : "Mindestens ein Auftrag passt mit den aktiven Boxengroessen nicht exakt in einen Ladeflug.";
 
-    resultAlternative.innerHTML = `
-      <article class="result-card result-card--warning">
-        <h2>Naechste sinnvolle Alternative</h2>
-        <p>Mit den aktiven Boxengroessen ist nur eine Mindestlieferung moeglich.</p>
-        <p>${formatInteger(plan.flightsRequired)} Flug/Fluege, ${formatInteger(plan.deliveredSCU)} SCU geliefert, ${formatInteger(plan.overfillSCU)} SCU Ueberlieferung.</p>
-        <p>Beispiel-Loadout: ${escapeHtml(formatBoxSummary(plan.aggregateBoxes))}</p>
+    renderError("Mindestens ein Auftrag ist mit der aktuellen Boxenauswahl oder den Slotgrenzen nicht exakt planbar.", blockingList);
+    renderCompletedMissions(plan, plan.missions[0]?.source ?? "", plan.missions[0]?.cargo ?? "");
+  }
+
+  function renderFinishedManifest(plan, source, cargoName) {
+    resultSummary.innerHTML = `
+      <article class="result-card">
+        <h2>Alle Auftraege erledigt</h2>
+        <p>${escapeHtml(cargoName || "Fracht")} ab ${escapeHtml(source || "Pickup offen")} ist komplett geliefert.</p>
       </article>
     `;
+    resultFlights.innerHTML = "";
+    renderCompletedMissions(plan, source, cargoName);
   }
 
   function calculateAndRender() {
@@ -643,35 +1038,26 @@
       const normalizedShip = normalizeShip(snapshot.ship);
       renderShipMeta(normalizedShip);
 
-      if (!(snapshot.mission.targetSCU > 0)) {
-        throw new Error("Bitte eine Missionsmenge groesser als 0 SCU eintragen.");
+      if (!snapshot.missions.length) {
+        throw new Error("Bitte mindestens einen Auftrag eintragen.");
       }
 
       if (!snapshot.boxSizes.length) {
         throw new Error("Bitte mindestens eine Kistengroesse aktivieren.");
       }
 
-      const plan = planMission({
+      const plan = planMissionManifest({
         ship: normalizedShip,
         boxSizes: snapshot.boxSizes,
-        targetSCU: snapshot.mission.targetSCU,
-        mode: snapshot.mission.mode
+        missions: snapshot.missions
       });
 
-      if (plan.reachable) {
-        renderPlan(plan, snapshot.mission, snapshot.mission.mode === "exact" ? "Exakter Ladeplan" : "Effizientester Missionsplan");
-        resultAlternative.innerHTML = "";
-      } else if (snapshot.mission.mode === "exact") {
-        const alternativePlan = planMission({
-          ship: normalizedShip,
-          boxSizes: snapshot.boxSizes,
-          targetSCU: snapshot.mission.targetSCU,
-          mode: "atLeast"
-        });
-        renderError("Exakte Lieferung mit diesem Schiff, den Slots und den aktiven Kistengroessen nicht moeglich.");
-        renderAlternativePlan(alternativePlan);
+      if (!plan.reachable) {
+        renderBlockedManifest(plan);
+      } else if (plan.flightsRequired === 0) {
+        renderFinishedManifest(plan, snapshot.source, snapshot.cargoName);
       } else {
-        renderError("Mit den gewaehlten Einstellungen konnte kein gueltiger Flugplan erzeugt werden.");
+        renderManifestPlan(plan, snapshot.source, snapshot.cargoName);
       }
 
       saveState({
@@ -679,39 +1065,51 @@
         shipName: shipNameInput.value,
         slotCapacities: slotCapacitiesInput.value,
         maxBoxesPerSlot: maxBoxesInput.value,
-        source: snapshot.mission.source,
-        destination: snapshot.mission.destination,
-        targetSCU: String(snapshot.mission.targetSCU),
-        deliveryMode: snapshot.mission.mode,
-        boxSizes: snapshot.boxSizes
+        source: snapshot.source,
+        cargoName: snapshot.cargoName,
+        boxSizes: snapshot.boxSizes,
+        missions: readMissionRowsFromDom()
       });
     } catch (error) {
       renderError(error instanceof Error ? error.message : "Unbekannter Fehler bei der Berechnung.");
+      resultAlternative.innerHTML = "";
     }
+  }
+
+  function applyExampleState() {
+    renderBoxSizes(DEFAULT_EXAMPLE.boxSizes);
+    applyPreset(DEFAULT_EXAMPLE.presetId, false);
+    shipNameInput.value = DEFAULT_EXAMPLE.shipName;
+    slotCapacitiesInput.value = DEFAULT_EXAMPLE.slotCapacities;
+    maxBoxesInput.value = DEFAULT_EXAMPLE.maxBoxesPerSlot;
+    form.elements.source.value = DEFAULT_EXAMPLE.source;
+    form.elements.cargoName.value = DEFAULT_EXAMPLE.cargoName;
+    renderMissionRows(DEFAULT_EXAMPLE.missions.map(createMissionDraft));
   }
 
   function hydrateFromSavedState() {
     const saved = loadState();
     if (!saved) {
-      applyPreset(SHIP_PRESETS[0].id, false);
-      form.elements.source.value = "Port Tressler";
-      form.elements.destination.value = "Area18";
-      form.elements.targetSCU.value = "93";
-      form.elements.deliveryMode.value = "exact";
-      renderBoxSizes(DEFAULT_BOX_SIZES);
+      applyExampleState();
       return;
     }
 
-    renderBoxSizes(saved.boxSizes?.length ? saved.boxSizes : DEFAULT_BOX_SIZES);
-    applyPreset(saved.presetId ?? SHIP_PRESETS[0].id, false);
+    renderBoxSizes(saved.boxSizes?.length ? saved.boxSizes : DEFAULT_EXAMPLE.boxSizes);
+    applyPreset(saved.presetId ?? DEFAULT_EXAMPLE.presetId, false);
 
     shipNameInput.value = saved.shipName ?? shipNameInput.value;
     slotCapacitiesInput.value = saved.slotCapacities ?? slotCapacitiesInput.value;
     maxBoxesInput.value = saved.maxBoxesPerSlot ?? maxBoxesInput.value;
-    form.elements.source.value = saved.source ?? "";
-    form.elements.destination.value = saved.destination ?? "";
-    form.elements.targetSCU.value = saved.targetSCU ?? "93";
-    form.elements.deliveryMode.value = saved.deliveryMode ?? "exact";
+    form.elements.source.value = saved.source ?? DEFAULT_EXAMPLE.source;
+    form.elements.cargoName.value = saved.cargoName ?? DEFAULT_EXAMPLE.cargoName;
+    renderMissionRows((saved.missions?.length ? saved.missions : DEFAULT_EXAMPLE.missions).map(createMissionDraft));
+  }
+
+  function setBoxSelection(predicate) {
+    for (const checkbox of form.querySelectorAll('input[name="box-size"]')) {
+      checkbox.checked = predicate(Number(checkbox.value));
+    }
+    calculateAndRender();
   }
 
   populatePresetOptions();
@@ -728,6 +1126,57 @@
     calculateAndRender();
   });
 
+  document.querySelector("#add-mission").addEventListener("click", () => {
+    const rows = readMissionRowsFromDom();
+    rows.push(createMissionDraft());
+    renderMissionRows(rows);
+    calculateAndRender();
+  });
+
+  document.querySelector("#load-example").addEventListener("click", () => {
+    applyExampleState();
+    calculateAndRender();
+  });
+
+  document.querySelector("#preset-boxes-16").addEventListener("click", () => {
+    setBoxSelection((size) => size <= 16);
+  });
+
+  document.querySelector("#preset-boxes-all").addEventListener("click", () => {
+    setBoxSelection(() => true);
+  });
+
+  missionList.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLButtonElement)) {
+      return;
+    }
+
+    if (target.dataset.action !== "remove-mission") {
+      return;
+    }
+
+    const rows = readMissionRowsFromDom();
+    const rowElement = target.closest(".mission-row");
+    const filtered = rows.filter((row) => row.id !== rowElement?.dataset.missionId);
+    renderMissionRows(filtered.length ? filtered : [createMissionDraft()]);
+    calculateAndRender();
+  });
+
+  missionList.addEventListener("input", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) {
+      return;
+    }
+
+    const rowElement = target.closest(".mission-row");
+    if (rowElement) {
+      updateMissionRowMeta(rowElement);
+    }
+
+    calculateAndRender();
+  });
+
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     calculateAndRender();
@@ -735,11 +1184,15 @@
 
   form.addEventListener("input", (event) => {
     if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) {
-      calculateAndRender();
+      if (!event.target.closest(".mission-row")) {
+        calculateAndRender();
+      }
     }
   });
 
-  form.addEventListener("change", () => {
-    calculateAndRender();
+  form.addEventListener("change", (event) => {
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) {
+      calculateAndRender();
+    }
   });
 }());

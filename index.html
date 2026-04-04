@@ -13,12 +13,12 @@
         <p class="eyebrow">Star Citizen Cargo Mission Planner</p>
         <h1>SCU-Laderaum-Planer</h1>
         <p class="hero-copy">
-          Schiff auswaehlen, Route eintragen, Kistengroessen aktivieren und sofort sehen,
-          welche Loadouts pro Flug sinnvoll sind.
+          Schiff auswaehlen, Pickup festlegen, mehrere Auftraege eintragen und sofort sehen,
+          welche Loadouts pro Ladeflug sinnvoll sind.
         </p>
         <div class="hero-ribbon">
           <span>Slots statt nur Gesamtkapazitaet</span>
-          <span>Exakt oder mindestens liefern</span>
+          <span>Mehrere Missionen pro Pickup</span>
           <span>Direkt anpassbar fuer deinen Patch</span>
         </div>
       </section>
@@ -61,39 +61,41 @@
 
           <div class="section-head">
             <h2>Mission</h2>
-            <p>Route und Sollmenge definieren.</p>
+            <p>Gemeinsame Abholung und einzelne Auftraege definieren.</p>
           </div>
 
           <div class="field-grid">
             <label>
-              <span>Von</span>
-              <input name="source" type="text" placeholder="z. B. Port Tressler">
+              <span>Pickup</span>
+              <input name="source" type="text" placeholder="z. B. MIC-L1 Shallow Frontier Station">
             </label>
 
             <label>
-              <span>Nach</span>
-              <input name="destination" type="text" placeholder="z. B. Area18">
+              <span>Ladung</span>
+              <input name="cargoName" type="text" placeholder="z. B. Quartz">
             </label>
           </div>
 
-          <div class="field-grid">
-            <label>
-              <span>Missionsmenge</span>
-              <input name="targetSCU" type="number" min="1" step="1" value="93">
-            </label>
+          <div class="section-head">
+            <h2>Auftraege</h2>
+            <p>Jede Zeile ist ein Ziel mit Gesamtmenge und optional bereits gelieferter SCU.</p>
+          </div>
 
-            <label>
-              <span>Liefermodus</span>
-              <select name="deliveryMode">
-                <option value="exact">Genau liefern</option>
-                <option value="atLeast">Mindestens liefern</option>
-              </select>
-            </label>
+          <div id="mission-list" class="mission-list"></div>
+
+          <div class="form-actions form-actions--compact">
+            <button type="button" class="button button--ghost" id="add-mission">Auftrag hinzufuegen</button>
+            <button type="button" class="button button--ghost" id="load-example">Screenshot-Beispiel laden</button>
           </div>
 
           <div class="section-head">
             <h2>Kisten</h2>
             <p>Nur Groessen aktivieren, die auf deiner Mission wirklich verfuegbar sind.</p>
+          </div>
+
+          <div class="form-actions form-actions--compact">
+            <button type="button" class="button button--ghost" id="preset-boxes-16">Nur bis 16 SCU</button>
+            <button type="button" class="button button--ghost" id="preset-boxes-all">Alle Boxen</button>
           </div>
 
           <div id="box-size-grid" class="box-size-grid"></div>

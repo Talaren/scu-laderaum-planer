@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildFlightPlans, planMission } from "../lib/planner.js";
+import { buildFlightPlans, planMission, planMissionManifest } from "../lib/planner.js";
 
 test("RAFT 3x32 liefert 93 SCU exakt in zwei Fluegen", () => {
   const ship = {
@@ -96,4 +96,46 @@ test("Flight plans respektieren feste Container-Slots", () => {
   const plan96 = plans.get(96);
   assert.equal(plan96.total, 96);
   assert.equal(plan96.boxCount, 3);
+});
+
+test("RAFT 6x32 packt drei Missionen mit maximal 16-SCU-Kisten in zwei Ladefluege", () => {
+  const manifest = planMissionManifest({
+    ship: {
+      name: "ARGO RAFT 6x32 Mission Cargo",
+      slotCapacities: [32, 32, 32, 32, 32, 32],
+      maxBoxesPerSlot: null
+    },
+    boxSizes: [16, 8, 4, 2, 1],
+    missions: [
+      { label: "Everus Harbor", destination: "Everus Harbor", totalSCU: 124 },
+      { label: "Seraphim", destination: "Seraphim Station", totalSCU: 93 },
+      { label: "Baijini", destination: "Baijini Point", totalSCU: 84 }
+    ]
+  });
+
+  assert.equal(manifest.reachable, true);
+  assert.equal(manifest.flightsRequired, 2);
+  assert.deepEqual(manifest.flights.map((flight) => flight.total), [177, 124]);
+  assert.deepEqual(manifest.flights[0].missions.map((mission) => mission.remainingSCU), [93, 84]);
+  assert.deepEqual(manifest.flights[1].missions.map((mission) => mission.remainingSCU), [124]);
+});
+
+test("Manifest ignoriert bereits abgeschlossene Missionen", () => {
+  const manifest = planMissionManifest({
+    ship: {
+      name: "ARGO RAFT 6x32 Mission Cargo",
+      slotCapacities: [32, 32, 32, 32, 32, 32],
+      maxBoxesPerSlot: null
+    },
+    boxSizes: [16, 8, 4, 2, 1],
+    missions: [
+      { label: "Everus Harbor", destination: "Everus Harbor", totalSCU: 124 },
+      { label: "Seraphim", destination: "Seraphim Station", totalSCU: 93 },
+      { label: "Baijini", destination: "Baijini Point", totalSCU: 84, deliveredSCU: 84 }
+    ]
+  });
+
+  assert.equal(manifest.reachable, true);
+  assert.equal(manifest.flightsRequired, 2);
+  assert.deepEqual(manifest.flights.map((flight) => flight.total), [124, 93]);
 });
