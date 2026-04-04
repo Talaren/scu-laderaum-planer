@@ -354,9 +354,8 @@ test("Gemeinsame Ladefluege werden nur gewaehlt, wenn sich die Kisten auf Ziele 
 
 test("Share-State laesst sich per URL roundtrippen", () => {
   const state = {
+    language: "de",
     presetId: "argo-raft",
-    shipName: "Argo RAFT",
-    slotCapacities: "32, 32, 32, 32, 32, 32",
     cargoLiftMaxBoxSize: "16",
     source: "Baijini-Point",
     cargoName: "",

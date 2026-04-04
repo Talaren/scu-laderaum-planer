@@ -1,0 +1,32 @@
+services:
+  scu-laderaum-planer:
+    image: nginx:1.27-alpine
+    container_name: scu-laderaum-planer
+    restart: unless-stopped
+    volumes:
+      - ./nginx-site.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./runtime/current:/usr/share/nginx/html:ro
+    networks:
+      - traefik-proxy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK}
+      - traefik.http.services.scu-laderaum-planer.loadbalancer.server.port=80
+      - traefik.http.routers.scu-laderaum-planer.rule=Host(`${APP_HOST}`) && PathPrefix(`${APP_PATH_PREFIX}/`)
+      - traefik.http.routers.scu-laderaum-planer.entrypoints=websecure
+      - traefik.http.routers.scu-laderaum-planer.tls=true
+      - traefik.http.routers.scu-laderaum-planer.middlewares=scu-laderaum-planer-strip
+      - traefik.http.middlewares.scu-laderaum-planer-strip.stripprefix.prefixes=${APP_PATH_PREFIX}
+      - traefik.http.middlewares.scu-laderaum-planer-strip.stripprefix.forceslash=true
+      - traefik.http.routers.scu-laderaum-planer-slash.rule=Host(`${APP_HOST}`) && Path(`${APP_PATH_PREFIX}`)
+      - traefik.http.routers.scu-laderaum-planer-slash.entrypoints=websecure
+      - traefik.http.routers.scu-laderaum-planer-slash.tls=true
+      - traefik.http.routers.scu-laderaum-planer-slash.middlewares=scu-laderaum-planer-slash-redirect
+      - traefik.http.middlewares.scu-laderaum-planer-slash-redirect.redirectregex.regex=^(https?://[^/]+)${APP_PATH_PREFIX}$$
+      - traefik.http.middlewares.scu-laderaum-planer-slash-redirect.redirectregex.replacement=$${1}${APP_PATH_PREFIX}/
+      - traefik.http.middlewares.scu-laderaum-planer-slash-redirect.redirectregex.permanent=true
+
+networks:
+  traefik-proxy:
+    external: true
+    name: ${TRAEFIK_NETWORK}

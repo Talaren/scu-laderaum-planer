@@ -1,43 +1,55 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>SCU-Laderaum-Planer</title>
+    <meta name="referrer" content="no-referrer">
+    <title>SCU Cargo Mission Planner</title>
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
     <div class="backdrop" aria-hidden="true"></div>
     <main class="app-shell">
       <section class="hero">
-        <p class="eyebrow">Star Citizen Cargo Mission Planner</p>
-        <h1>SCU-Laderaum-Planer</h1>
-        <p class="hero-copy">
-          Schiff auswaehlen, Pickup festlegen, mehrere Auftraege eintragen und sofort sehen,
-          welche Loadouts pro Ladeflug sinnvoll sind.
+        <div class="hero-toolbar">
+          <label class="toolbar-field">
+            <span data-i18n="field.language">Language</span>
+            <select id="ui-language" name="uiLanguage"></select>
+          </label>
+        </div>
+        <p class="eyebrow" data-i18n="hero.eyebrow">Star Citizen Cargo Mission Planner</p>
+        <h1 data-i18n="hero.title">SCU Cargo Mission Planner</h1>
+        <p class="hero-copy" data-i18n="hero.copy">
+          Choose your ship, define one pickup, add multiple missions, and see useful loadouts for each cargo run instantly.
         </p>
         <div class="hero-ribbon">
-          <span>Slots statt nur Gesamtkapazitaet</span>
-          <span>Mehrere Missionen pro Pickup</span>
-          <span>Direkt anpassbar fuer deinen Patch</span>
+          <span data-i18n="hero.ribbon.slots">Slots instead of total capacity only</span>
+          <span data-i18n="hero.ribbon.multiMission">Multiple missions per pickup</span>
+          <span data-i18n="hero.ribbon.patch">Easy to adjust for your patch</span>
         </div>
       </section>
 
       <section class="panel panel--form">
         <form id="planner-form" novalidate>
           <div class="section-head">
-            <h2>Flugprofil</h2>
-            <p>Schiff waehlen und direkt losplanen.</p>
+            <h2 data-i18n="section.profile.title">Flight profile</h2>
+            <p data-i18n="section.profile.copy">Pick a ship and start planning right away.</p>
           </div>
 
           <div class="field-grid">
             <label>
-              <span>Schiff suchen</span>
-              <input id="ship-search" name="shipSearch" type="search" placeholder="z. B. RAFT, Hull, Zeus">
+              <span data-i18n="field.shipSearch">Search ship</span>
+              <input
+                id="ship-search"
+                name="shipSearch"
+                type="search"
+                placeholder="e.g. RAFT, Hull, Zeus"
+                data-i18n-placeholder="placeholder.shipSearch"
+              >
             </label>
 
             <label>
-              <span>Schiff</span>
+              <span data-i18n="field.ship">Ship</span>
               <select id="ship-preset" name="shipPreset"></select>
             </label>
           </div>
@@ -47,48 +59,58 @@
           </div>
 
           <div class="section-head">
-            <h2>Mission</h2>
-            <p>Gemeinsame Abholung und einzelne Auftraege definieren.</p>
+            <h2 data-i18n="section.mission.title">Mission</h2>
+            <p data-i18n="section.mission.copy">Define one shared pickup and separate delivery missions.</p>
           </div>
 
           <div class="field-grid">
             <label>
-              <span>Pickup</span>
-              <input name="source" type="text" placeholder="z. B. MIC-L1 Shallow Frontier Station">
+              <span data-i18n="field.pickup">Pickup</span>
+              <input
+                name="source"
+                type="text"
+                placeholder="e.g. MIC-L1 Shallow Frontier Station"
+                data-i18n-placeholder="placeholder.pickup"
+              >
             </label>
 
             <label>
-              <span>Standard-Ladung</span>
-              <input name="cargoName" type="text" placeholder="optional, z. B. Quartz">
+              <span data-i18n="field.defaultCargo">Default cargo</span>
+              <input
+                name="cargoName"
+                type="text"
+                placeholder="optional, e.g. Quartz"
+                data-i18n-placeholder="placeholder.defaultCargo"
+              >
             </label>
           </div>
 
           <div class="form-actions form-actions--compact">
-            <button type="button" class="button button--ghost" id="clear-source">Pickup leeren</button>
+            <button type="button" class="button button--ghost" id="clear-source" data-i18n="action.clearSource">Clear pickup</button>
           </div>
 
           <div class="section-head">
-            <h2>Auftraege</h2>
-            <p>Jede Zeile ist ein Ziel mit eigener Ladung, Gesamtmenge und optional bereits gelieferter SCU.</p>
+            <h2 data-i18n="section.orders.title">Orders</h2>
+            <p data-i18n="section.orders.copy">Each row is one destination with its own cargo, total amount, and optional delivered SCU.</p>
           </div>
 
           <div id="mission-list" class="mission-list"></div>
 
           <div class="form-actions form-actions--compact">
-            <button type="button" class="button button--ghost" id="add-mission">Auftrag hinzufuegen</button>
-            <button type="button" class="button button--ghost" id="clear-destinations">Ziele leeren</button>
+            <button type="button" class="button button--ghost" id="add-mission" data-i18n="action.addMission">Add mission</button>
+            <button type="button" class="button button--ghost" id="clear-destinations" data-i18n="action.clearDestinations">Clear destinations</button>
           </div>
 
           <div class="section-head">
-            <h2>Kisten</h2>
-            <p>Die maximale Aufzugkiste bestimmt, welche Missionsboxen entstehen. Eine Umverteilung in kleinere Container gibt es derzeit nicht.</p>
+            <h2 data-i18n="section.boxes.title">Boxes</h2>
+            <p data-i18n="section.boxes.copy">The largest freight-elevator box decides which mission containers spawn. Repacking into smaller containers is currently not possible.</p>
           </div>
 
           <div class="field-grid">
             <label>
-              <span>Max. Kistengroesse im Aufzug</span>
+              <span data-i18n="field.cargoLiftMaxBoxSize">Max freight elevator box size</span>
               <select id="cargo-lift-max-box-size" name="cargoLiftMaxBoxSize">
-                <option value="">keine Begrenzung</option>
+                <option value="" data-i18n="option.noLimit">no limit</option>
                 <option value="32">32 SCU</option>
                 <option value="24">24 SCU</option>
                 <option value="16">16 SCU</option>
@@ -101,19 +123,19 @@
           </div>
 
           <div class="form-actions">
-            <button type="submit" class="button button--primary">Berechnen</button>
-            <button type="button" class="button button--ghost" id="share-link">Link kopieren</button>
+            <button type="submit" class="button button--primary" data-i18n="action.calculate">Calculate</button>
+            <button type="button" class="button button--ghost" id="share-link" data-i18n="action.shareLink">Copy link</button>
           </div>
           <p id="share-status" class="share-status" aria-live="polite"></p>
 
           <div class="section-head section-head--tail">
-            <h2>Beispiele</h2>
-            <p>Vorbelegte Szenarien zum schnellen Ausprobieren.</p>
+            <h2 data-i18n="section.examples.title">Examples</h2>
+            <p data-i18n="section.examples.copy">Pre-filled scenarios for quick testing.</p>
           </div>
 
           <div class="form-actions form-actions--compact">
             <select id="example-scenario" name="exampleScenario"></select>
-            <button type="button" class="button button--ghost" id="load-example">Beispiel laden</button>
+            <button type="button" class="button button--ghost" id="load-example" data-i18n="action.loadExample">Load example</button>
           </div>
         </form>
       </section>
@@ -125,6 +147,11 @@
       </section>
     </main>
 
+    <footer class="app-footer" id="build-footer" hidden></footer>
+
+    <script src="./build-info.js"></script>
+    <script src="./translations/en.js"></script>
+    <script src="./translations/de.js"></script>
     <script src="./app-standalone.js"></script>
   </body>
 </html>

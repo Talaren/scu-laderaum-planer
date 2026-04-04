@@ -1,10 +1,97 @@
 (function () {
   const DEFAULT_BOX_SIZES = [32, 24, 16, 8, 4, 2, 1];
   const STORAGE_KEY = "scu-laderaum-planer:v3";
+  const DEFAULT_LANGUAGE = "en";
+  const SUPPORTED_LANGUAGES = ["en", "de"];
   const DESCENDING = (left, right) => right - left;
   const ASCENDING = (left, right) => left - right;
-  const formatter = new Intl.NumberFormat("de-DE");
+  const BUILD_INFO = normalizeBuildInfo(globalThis.SCU_PLANNER_BUILD_INFO);
+  let currentLanguage = DEFAULT_LANGUAGE;
+  let formatter = new Intl.NumberFormat("en-US");
   const flightPlanCache = new Map();
+
+  function normalizeBuildInfo(info) {
+    return {
+      version: typeof info?.version === "string" ? info.version.trim() : "",
+      repositoryUrl: typeof info?.repositoryUrl === "string" ? info.repositoryUrl.trim() : "",
+      repositoryLabel: typeof info?.repositoryLabel === "string" ? info.repositoryLabel.trim() : ""
+    };
+  }
+
+  function deriveRepositoryLabel(repositoryUrl) {
+    if (!repositoryUrl) {
+      return "";
+    }
+
+    try {
+      const url = new URL(repositoryUrl);
+      const path = url.pathname.replace(/^\/+|\/+$/gu, "").replace(/\.git$/u, "");
+      return path || repositoryUrl;
+    } catch {
+      return repositoryUrl.replace(/\.git$/u, "");
+    }
+  }
+
+  function getSafeRepositoryUrl(repositoryUrl) {
+    if (!repositoryUrl) {
+      return "";
+    }
+
+    try {
+      const url = new URL(repositoryUrl);
+      return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : "";
+    } catch {
+      return "";
+    }
+  }
+
+  function getTranslationCatalogs() {
+    return globalThis.SCU_PLANNER_TRANSLATIONS ?? {};
+  }
+
+  function normalizeLanguage(language) {
+    return SUPPORTED_LANGUAGES.includes(language) ? language : DEFAULT_LANGUAGE;
+  }
+
+  function getLanguageLocale(language) {
+    return language === "de" ? "de-DE" : "en-US";
+  }
+
+  function formatTemplate(template, values = {}) {
+    return Object.entries(values).reduce(
+      (message, [key, value]) => message.replaceAll(`{${key}}`, String(value)),
+      template
+    );
+  }
+
+  function t(key, values = {}) {
+    const catalogs = getTranslationCatalogs();
+    const normalizedLanguage = normalizeLanguage(currentLanguage);
+    const template = catalogs[normalizedLanguage]?.[key]
+      ?? catalogs[DEFAULT_LANGUAGE]?.[key]
+      ?? key;
+
+    return formatTemplate(template, values);
+  }
+
+  function setLanguage(language) {
+    currentLanguage = normalizeLanguage(language);
+    formatter = new Intl.NumberFormat(getLanguageLocale(currentLanguage));
+    document.documentElement.lang = currentLanguage;
+    document.title = t("app.title");
+  }
+
+  function translateShipGroup(group) {
+    return group === "Sonstige" ? t("ship.group.other") : group;
+  }
+
+  function translateShipNote(ship) {
+    if (ship.noteKey) {
+      return t(ship.noteKey);
+    }
+
+    return ship.note?.trim() || "";
+  }
 
   function repeatSlots(capacity, count) {
     return Array.from({ length: count }, () => capacity);
@@ -14,13 +101,14 @@
     return slotGroups.flatMap(([capacity, count]) => repeatSlots(capacity, count));
   }
 
-  function createGridPreset({ id, name, group, slotGroups, note = "" }) {
+  function createGridPreset({ id, name, group, slotGroups, note = "", noteKey = "" }) {
     return {
       id,
       name,
       group,
       slotCapacities: expandSlotGroups(slotGroups),
-      note
+      note,
+      noteKey
     };
   }
 
@@ -30,7 +118,7 @@
       name: "Argo RAFT",
       group: "Argo",
       slotGroups: [[32, 6]],
-      note: "Sechs feste 32-SCU-Slots."
+      noteKey: "ship.note.argoRaft"
     }),
     createGridPreset({ id: "rsi-zeus-mk-ii-cl", name: "RSI Zeus MK II CL", group: "RSI", slotGroups: [[32, 2], [4, 8], [2, 16]] }),
     createGridPreset({ id: "rsi-aurora-es-ln-lx-mr", name: "RSI Aurora ES / LN / LX / MR", group: "RSI", slotGroups: [[2, 1], [1, 1]] }),
@@ -60,7 +148,7 @@
       name: "Drake Caterpillar",
       group: "Drake",
       slotGroups: [[24, 18], [4, 4], [2, 56], [1, 16]],
-      note: "PDF-Grid laut Autoload. Beim manuellen Laden ist die Frontsektion derzeit fehlerhaft; 24-SCU-Kisten passen dort nicht sauber bis nach hinten."
+      noteKey: "ship.note.drakeCaterpillar"
     }),
     createGridPreset({ id: "crusader-m2-hercules-starlifter", name: "Crusader M2 Hercules Starlifter", group: "Crusader", slotGroups: [[32, 10], [4, 40], [2, 21]] }),
     createGridPreset({ id: "crusader-a2-hercules-starlifter", name: "Crusader A2 Hercules Starlifter", group: "Crusader", slotGroups: [[32, 6], [4, 1]] }),
@@ -100,7 +188,7 @@
       name: "Origin 600i Explorer",
       group: "Origin",
       slotGroups: [[2, 20], [1, 4]],
-      note: "Korrigierte PDF-Angabe: 20x 2 SCU plus 4x 1 SCU ergeben 44 SCU."
+      noteKey: "ship.note.origin600iExplorer"
     }),
     createGridPreset({ id: "origin-890-jump", name: "Origin 890 Jump", group: "Origin", slotGroups: [[32, 6], [24, 4], [16, 2], [2, 28], [1, 12]] }),
     createGridPreset({ id: "origin-325a-350r", name: "Origin 325a / 350r", group: "Origin", slotGroups: [[4, 1]] }),
@@ -117,7 +205,7 @@
       name: "Esperia Prowler Utility",
       group: "Sonstige",
       slotGroups: [[16, 2]],
-      note: "Korrigierte PDF-Angabe: 2x 16 SCU ergeben 32 SCU."
+      noteKey: "ship.note.esperiaProwlerUtility"
     }),
     createGridPreset({ id: "tumbril-cyclone", name: "Tumbril Cyclone", group: "Sonstige", slotGroups: [[1, 1]] }),
     createGridPreset({ id: "consolidated-outland-nomad", name: "Consolidated Outland Nomad", group: "Sonstige", slotGroups: [[16, 1], [2, 4]] }),
@@ -181,13 +269,14 @@
       .map((value) => Math.trunc(value));
 
     if (!slotCapacities.length) {
-      throw new Error("Mindestens ein gueltiger Slot mit Kapazitaet > 0 wird benoetigt.");
+      throw new Error(t("errors.needSlot"));
     }
 
     return {
       id: ship.id ?? "custom",
-      name: ship.name?.trim() || "Benutzerdefiniertes Schiff",
+      name: ship.name?.trim() || t("ship.customName"),
       note: ship.note?.trim() || "",
+      noteKey: ship.noteKey ?? "",
       slotCapacities,
       totalCapacity: sumValues(slotCapacities)
     };
@@ -214,7 +303,7 @@
     const groups = input.length && typeof input[0] === "number" ? countBoxes(input) : input;
     return groups.length
       ? groups.map(({ size, count }) => `${count}x ${size} SCU`).join(", ")
-      : "keine Kisten";
+      : t("result.noBoxes");
   }
 
   function sortBoxes(boxes) {
@@ -561,7 +650,7 @@
   function planMission({ ship, boxSizes, maxBoxSize = null, targetSCU, mode = "exact" }) {
     const normalizedTarget = Math.trunc(Number(targetSCU));
     if (!(normalizedTarget > 0)) {
-      throw new Error("Die Missionsmenge muss groesser als 0 SCU sein.");
+      throw new Error(t("errors.needPositiveMission"));
     }
 
     const normalizedShip = normalizeShip(ship);
@@ -583,7 +672,7 @@
 
     const normalizedBoxSizes = constrainBoxSizes(boxSizes, maxBoxSize);
     if (!normalizedBoxSizes.length) {
-      throw new Error("Mindestens eine passende Kistengroesse muss verfuegbar sein.");
+      throw new Error(t("errors.needFittingBoxSize"));
     }
 
     const flightPlans = buildFlightPlans(normalizedShip, normalizedBoxSizes);
@@ -712,19 +801,19 @@
     const deliveredSCU = Math.max(0, Math.trunc(Number(mission.deliveredSCU ?? 0)));
 
     if (!(totalSCU > 0)) {
-      throw new Error(`Auftrag ${index + 1} braucht eine Gesamtmenge groesser als 0 SCU.`);
+      throw new Error(t("errors.needPositiveMission"));
     }
 
     if (deliveredSCU > totalSCU) {
-      throw new Error(`Auftrag ${index + 1} hat mehr geliefert als insgesamt benoetigt.`);
+      throw new Error(t("errors.tooMuchDelivered", { index: index + 1 }));
     }
 
     return {
       id: mission.id ?? `mission-${index + 1}`,
-      label: mission.label?.trim() || `Auftrag ${index + 1}`,
+      label: mission.label?.trim() || t("mission.label", { index: index + 1 }),
       cargo: mission.cargo?.trim() || "",
       source: mission.source?.trim() || "",
-      destination: mission.destination?.trim() || `Ziel ${index + 1}`,
+      destination: mission.destination?.trim() || t("mission.defaultDestination", { index: index + 1 }),
       totalSCU,
       deliveredSCU,
       remainingSCU: totalSCU - deliveredSCU
@@ -940,7 +1029,7 @@
     const maxLoadableContainerSize = getMaxLoadableContainerSize(normalizedShip);
     const normalizedBoxSizes = constrainBoxSizes(boxSizes, maxBoxSize);
     if (!normalizedBoxSizes.length) {
-      throw new Error("Mindestens eine passende Kistengroesse muss verfuegbar sein.");
+      throw new Error(t("errors.needFittingBoxSize"));
     }
 
     const manifest = normalizeMissionEntries(missions);
@@ -1033,7 +1122,7 @@
 
     if (packableMissions.length) {
       if (packableMissions.length > 15) {
-        throw new Error("Maximal 15 kombinierbare Restauftraege gleichzeitig unterstuetzt.");
+        throw new Error(t("errors.tooManyPackableMissions"));
       }
 
       const subsetPlans = new Map();
@@ -1198,7 +1287,7 @@
 
   const LARGE_SINGLE_EXAMPLE = {
     id: "large-single",
-    label: "Grossauftrag",
+    labelKey: "example.largeSingle",
     presetId: "argo-raft",
     cargoLiftMaxBoxSize: "16",
     source: "Baijini-Point oberhalb von ArcCorp",
@@ -1210,7 +1299,7 @@
 
   const SAME_CARGO_MULTI_DESTINATION_EXAMPLE = {
     id: "same-cargo-multi-stop",
-    label: "Gleiche Fracht, mehrere Ziele",
+    labelKey: "example.sameCargoMultiStop",
     presetId: "argo-raft",
     cargoLiftMaxBoxSize: "16",
     source: "MIC-L1 Shallow Frontier Station",
@@ -1224,7 +1313,7 @@
 
   const MIXED_CARGO_SHARED_DESTINATION_EXAMPLE = {
     id: "mixed-cargo-shared-destination",
-    label: "Gemischte Fracht mit geteiltem Ziel",
+    labelKey: "example.mixedCargoSharedDestination",
     presetId: "argo-raft",
     cargoLiftMaxBoxSize: "16",
     source: "Everus Harbor oberhalb von Hurston",
@@ -1239,7 +1328,7 @@
 
   const RAFT_THREE_SMALL_ONE_FULL_EXAMPLE = {
     id: "raft-three-small-one-full",
-    label: "RAFT: 3 kleine Ziele + 1 Vollflug",
+    labelKey: "example.raftThreeSmallOneFull",
     presetId: "argo-raft",
     cargoLiftMaxBoxSize: "16",
     source: "MIC-L1 Shallow Frontier Station",
@@ -1254,7 +1343,7 @@
 
   const SMALL_SHIP_BLOCKED_EXAMPLE = {
     id: "small-ship-blocked",
-    label: "Zu kleines Schiff fuer Aufzugkiste",
+    labelKey: "example.smallShipBlocked",
     presetId: "aegis-avenger-titan",
     cargoLiftMaxBoxSize: "16",
     source: "Everus Harbor oberhalb von Hurston",
@@ -1274,6 +1363,7 @@
   const DEFAULT_EXAMPLE = EXAMPLE_SCENARIOS[0];
 
   const form = document.querySelector("#planner-form");
+  const languageSelect = document.querySelector("#ui-language");
   const shipSearchInput = document.querySelector("#ship-search");
   const presetSelect = document.querySelector("#ship-preset");
   const exampleScenarioSelect = document.querySelector("#example-scenario");
@@ -1284,6 +1374,7 @@
   const resultFlights = document.querySelector("#result-flights");
   const resultAlternative = document.querySelector("#result-alternative");
   const shareStatus = document.querySelector("#share-status");
+  const buildFooter = document.querySelector("#build-footer");
   let lastRenderedPlan = null;
 
   function escapeHtml(value) {
@@ -1298,20 +1389,82 @@
     return formatter.format(Math.trunc(value));
   }
 
+  function populateLanguageOptions() {
+    const previousValue = languageSelect.value;
+    languageSelect.innerHTML = SUPPORTED_LANGUAGES
+      .map((language) => `<option value="${language}">${escapeHtml(t(`language.option.${language}`))}</option>`)
+      .join("");
+    languageSelect.value = normalizeLanguage(previousValue || currentLanguage);
+  }
+
+  function applyStaticTranslations() {
+    document.querySelectorAll("[data-i18n]").forEach((element) => {
+      element.textContent = t(element.dataset.i18n);
+    });
+
+    document.querySelectorAll("[data-i18n-placeholder]").forEach((element) => {
+      element.setAttribute("placeholder", t(element.dataset.i18nPlaceholder));
+    });
+
+    const noLimitOption = cargoLiftMaxBoxSizeSelect.querySelector('option[value=""]');
+    if (noLimitOption) {
+      noLimitOption.textContent = t("option.noLimit");
+    }
+  }
+
+  function getLocalizedShipSearchText(preset) {
+    return `${preset.name} ${translateShipGroup(preset.group)} ${translateShipNote(preset)}`.toLowerCase();
+  }
+
+  function renderBuildFooter() {
+    const version = BUILD_INFO.version;
+    const repositoryUrl = getSafeRepositoryUrl(BUILD_INFO.repositoryUrl);
+    const repositoryLabel = BUILD_INFO.repositoryLabel || deriveRepositoryLabel(repositoryUrl);
+
+    if (!version && !repositoryUrl) {
+      buildFooter.hidden = true;
+      buildFooter.innerHTML = "";
+      return;
+    }
+
+    const parts = [];
+
+    if (version) {
+      parts.push(`
+        <span class="app-footer__item">
+          <strong>${escapeHtml(t("footer.version"))}</strong>
+          <span>${escapeHtml(version)}</span>
+        </span>
+      `);
+    }
+
+    if (repositoryUrl) {
+      parts.push(`
+        <span class="app-footer__item">
+          <strong>${escapeHtml(t("footer.repository"))}</strong>
+          <a href="${escapeHtml(repositoryUrl)}" target="_blank" rel="noreferrer">${escapeHtml(repositoryLabel)}</a>
+        </span>
+      `);
+    }
+
+    buildFooter.innerHTML = `<div class="app-footer__inner">${parts.join("")}</div>`;
+    buildFooter.hidden = false;
+  }
+
   function populatePresetOptions(searchQuery = "", preferredPresetId = presetSelect.value) {
     const normalizedQuery = searchQuery.trim().toLowerCase();
     const visiblePresets = normalizedQuery
-      ? SHIP_PRESETS.filter((preset) => `${preset.name} ${preset.group} ${preset.note}`.toLowerCase().includes(normalizedQuery))
+      ? SHIP_PRESETS.filter((preset) => getLocalizedShipSearchText(preset).includes(normalizedQuery))
       : SHIP_PRESETS;
 
     if (!visiblePresets.length) {
-      presetSelect.innerHTML = '<option value="">Keine Treffer</option>';
+      presetSelect.innerHTML = `<option value="">${escapeHtml(t("ship.noResults"))}</option>`;
       presetSelect.disabled = true;
       return null;
     }
 
     const groupedPresets = visiblePresets.reduce((groups, preset) => {
-      const group = preset.group || "Weitere";
+      const group = translateShipGroup(preset.group || "Sonstige");
       if (!groups.has(group)) {
         groups.set(group, []);
       }
@@ -1337,7 +1490,7 @@
 
   function populateExampleOptions() {
     exampleScenarioSelect.innerHTML = EXAMPLE_SCENARIOS
-      .map((example) => `<option value="${example.id}">${escapeHtml(example.label)}</option>`)
+      .map((example) => `<option value="${example.id}">${escapeHtml(t(example.labelKey))}</option>`)
       .join("");
   }
 
@@ -1378,28 +1531,28 @@
           <article class="mission-row" data-mission-id="${escapeHtml(row.id)}">
             <div class="mission-row__grid">
               <label>
-                <span>Ziel ${index + 1}</span>
-                <input type="text" name="mission-destination" value="${escapeHtml(row.destination)}" placeholder="z. B. Seraphim-Station">
+                <span>${escapeHtml(t("mission.destinationLabel", { index: index + 1 }))}</span>
+                <input type="text" name="mission-destination" value="${escapeHtml(row.destination)}" placeholder="${escapeHtml(t("placeholder.destination"))}">
               </label>
               <label>
-                <span>Ladung</span>
-                <input type="text" name="mission-cargo" value="${escapeHtml(row.cargoName)}" placeholder="z. B. Quantum Fuel">
+                <span>${escapeHtml(t("mission.cargoLabel"))}</span>
+                <input type="text" name="mission-cargo" value="${escapeHtml(row.cargoName)}" placeholder="${escapeHtml(t("placeholder.cargo"))}">
               </label>
               <label>
-                <span>Gesamt-SCU</span>
-                <input type="number" name="mission-total" min="1" step="1" value="${escapeHtml(row.totalSCU)}" placeholder="z. B. 93">
+                <span>${escapeHtml(t("mission.totalLabel"))}</span>
+                <input type="number" name="mission-total" min="1" step="1" value="${escapeHtml(row.totalSCU)}" placeholder="${escapeHtml(t("placeholder.total"))}">
               </label>
               <label>
-                <span>Geliefert</span>
-                <input type="number" name="mission-delivered" min="0" step="1" value="${escapeHtml(row.deliveredSCU)}" placeholder="0">
+                <span>${escapeHtml(t("mission.deliveredLabel"))}</span>
+                <input type="number" name="mission-delivered" min="0" step="1" value="${escapeHtml(row.deliveredSCU)}" placeholder="${escapeHtml(t("placeholder.delivered"))}">
               </label>
               <div class="mission-row__meta">
-                <span>Offen</span>
+                <span>${escapeHtml(t("mission.remainingLabel"))}</span>
                 <strong data-role="remaining">${formatInteger(remainingSCU)} SCU</strong>
               </div>
             </div>
             <div class="mission-row__actions">
-              <button type="button" class="button button--ghost mission-row__remove" data-action="remove-mission">Entfernen</button>
+              <button type="button" class="button button--ghost mission-row__remove" data-action="remove-mission">${escapeHtml(t("action.removeMission"))}</button>
             </div>
           </article>
         `;
@@ -1435,8 +1588,9 @@
     } : null;
 
     presetSelect.value = preset.id;
-    shipHint.dataset.baseNote = preset.note;
-    shipHint.textContent = preset.note;
+    shipHint.dataset.baseNote = preset.note ?? "";
+    shipHint.dataset.baseNoteKey = preset.noteKey ?? "";
+    shipHint.textContent = translateShipNote(preset);
 
     if (savedMissionData) {
       form.elements.source.value = savedMissionData.source;
@@ -1469,7 +1623,7 @@
 
   function collectMissionInput() {
     if (presetSelect.disabled || !presetSelect.value) {
-      throw new Error("Bitte ein Schiff aus der Trefferliste waehlen.");
+      throw new Error(t("errors.needShip"));
     }
 
     const selectedPreset = getShipPresetById(presetSelect.value);
@@ -1482,7 +1636,7 @@
       .filter((row) => row.destination || row.cargoName || row.totalSCU || row.deliveredSCU)
       .map((row, index) => ({
         id: row.id,
-        label: row.destination || `Auftrag ${index + 1}`,
+        label: row.destination || t("mission.label", { index: index + 1 }),
         source,
         destination: row.destination,
         cargo: resolveMissionCargo(row.cargoName, cargoName),
@@ -1516,6 +1670,7 @@
 
   function sanitizeShareState(state) {
     return {
+      language: normalizeLanguage(state?.language),
       presetId: state?.presetId ?? "",
       cargoLiftMaxBoxSize: state?.cargoLiftMaxBoxSize ?? "",
       source: state?.source ?? "",
@@ -1617,8 +1772,9 @@
   }
 
   function renderShipMeta(ship) {
-    const baseNote = shipHint.dataset.baseNote?.trim() || ship.note;
-    const details = `Slots: ${describeSlotCapacities(ship.slotCapacities)}.`;
+    const baseNoteKey = shipHint.dataset.baseNoteKey?.trim() || ship.noteKey;
+    const baseNote = baseNoteKey ? t(baseNoteKey) : shipHint.dataset.baseNote?.trim() || ship.note;
+    const details = t("ship.meta.slots", { slots: describeSlotCapacities(ship.slotCapacities) });
     shipHint.textContent = baseNote ? `${baseNote} ${details}` : details;
   }
 
@@ -1626,7 +1782,7 @@
     lastRenderedPlan = null;
     resultSummary.innerHTML = `
       <article class="result-card result-card--alert">
-        <h2>Berechnung blockiert</h2>
+        <h2>${escapeHtml(t("result.errorTitle"))}</h2>
         <p>${escapeHtml(message)}</p>
         ${details ? `<p>${escapeHtml(details)}</p>` : ""}
       </article>
@@ -1641,13 +1797,16 @@
     if (manifest.completedMissions.length) {
       sections.push(`
         <article class="result-card">
-          <h2>Bereits erledigt</h2>
+          <h2>${escapeHtml(t("result.completedTitle"))}</h2>
           <ul class="manifest-list">
             ${manifest.completedMissions.map((mission) => `
               <li>
                 <strong>${escapeHtml(mission.destination)}</strong>
-                <span>${formatInteger(mission.totalSCU)} SCU abgeschlossen</span>
-                <span>${escapeHtml(mission.cargo || cargoName || "Fracht")} von ${escapeHtml(source || mission.source || "Pickup offen")}</span>
+                <span>${escapeHtml(t("result.completedMission.status", { scu: formatInteger(mission.totalSCU) }))}</span>
+                <span>${escapeHtml(t("result.completedMission.detail", {
+                  cargo: mission.cargo || cargoName || t("result.cargoFallback"),
+                  source: source || mission.source || t("result.routePickupOpen")
+                }))}</span>
               </li>
             `).join("")}
           </ul>
@@ -1657,9 +1816,11 @@
 
     sections.push(`
       <article class="result-card">
-        <h2>Aktive Kisten</h2>
+        <h2>${escapeHtml(t("result.activeBoxesTitle"))}</h2>
         <p>${escapeHtml(manifest.boxSizes.map((size) => `${size} SCU`).join(", "))}</p>
-        <p>${escapeHtml(cargoLiftMaxBoxSize == null ? "Aufzuglimit: keine Begrenzung." : `Aufzuglimit: ${cargoLiftMaxBoxSize} SCU.`)}</p>
+        <p>${escapeHtml(cargoLiftMaxBoxSize == null
+          ? t("result.liftLimit.none")
+          : t("result.liftLimit.value", { size: cargoLiftMaxBoxSize }))}</p>
       </article>
     `);
 
@@ -1674,21 +1835,21 @@
     )];
 
     if (!cargoTypes.length) {
-      return fallbackCargo || "Fracht";
+      return fallbackCargo || t("result.cargoFallback");
     }
 
     if (cargoTypes.length <= 3) {
       return cargoTypes.join(", ");
     }
 
-    return `${cargoTypes.length} Frachttypen`;
+    return t("result.cargoTypes.many", { count: cargoTypes.length });
   }
 
   function groupFlightLoadsByCargo(missions, fallbackCargo = "") {
     const groups = new Map();
 
     for (const mission of missions) {
-      const cargo = mission.cargo?.trim() || fallbackCargo || "Fracht";
+      const cargo = mission.cargo?.trim() || fallbackCargo || t("result.cargoFallback");
       if (!groups.has(cargo)) {
         groups.set(cargo, {
           label: cargo,
@@ -1701,14 +1862,17 @@
       const group = groups.get(cargo);
       group.totalSCU += mission.remainingSCU;
       group.boxes.push(...(mission.boxes ?? []));
-      group.destinations.add(mission.destination || "Ziel offen");
+      group.destinations.add(mission.destination || t("result.destinationOpen"));
     }
 
     return [...groups.values()]
       .map((group) => ({
         ...group,
         boxSummary: countBoxes(group.boxes),
-        meta: `${group.destinations.size} Ziel${group.destinations.size === 1 ? "" : "e"}`
+        meta: t(
+          group.destinations.size === 1 ? "result.flightTask.stopCount.one" : "result.flightTask.stopCount.other",
+          { count: group.destinations.size }
+        )
       }))
       .sort((left, right) => right.totalSCU - left.totalSCU);
   }
@@ -1717,7 +1881,7 @@
     const groups = new Map();
 
     for (const mission of missions) {
-      const destination = mission.destination?.trim() || "Ziel offen";
+      const destination = mission.destination?.trim() || t("result.destinationOpen");
       if (!groups.has(destination)) {
         groups.set(destination, {
           label: destination,
@@ -1730,7 +1894,7 @@
       const group = groups.get(destination);
       group.totalSCU += mission.remainingSCU;
       group.boxes.push(...(mission.boxes ?? []));
-      group.cargoTypes.add(mission.cargo?.trim() || fallbackCargo || "Fracht");
+      group.cargoTypes.add(mission.cargo?.trim() || fallbackCargo || t("result.cargoFallback"));
     }
 
     return [...groups.values()]
@@ -1749,9 +1913,9 @@
         <ul class="flight-task-list">
           ${groups.map((group) => `
             <li>
-              <strong>${escapeHtml(group.label)}</strong>
-              <span>${formatInteger(group.totalSCU)} SCU · ${escapeHtml(formatBoxSummary(group.boxSummary))}</span>
-              <span>${escapeHtml(group.meta)}</span>
+          <strong>${escapeHtml(group.label)}</strong>
+          <span>${formatInteger(group.totalSCU)} SCU · ${escapeHtml(formatBoxSummary(group.boxSummary))}</span>
+          <span>${escapeHtml(group.meta)}</span>
             </li>
           `).join("")}
         </ul>
@@ -1766,7 +1930,7 @@
       .filter((slot) => slot.used > 0)
       .map((slot) => `
         <li>
-          <strong>Slot ${slot.slotIndex}</strong>
+          <strong>${escapeHtml(t("result.flight.slot", { index: slot.slotIndex }))}</strong>
           <span>${formatInteger(slot.used)} / ${formatInteger(slot.capacity)} SCU</span>
           <span>${escapeHtml(formatBoxSummary(slot.boxes))}</span>
         </li>
@@ -1776,19 +1940,22 @@
     return `
       <article class="flight-card">
         <header>
-          <p class="flight-index">Ladeflug ${flight.number}</p>
+          <p class="flight-index">${escapeHtml(t("result.flight.title", { number: flight.number }))}</p>
           <h3>${formatInteger(flight.total)} SCU</h3>
         </header>
-        <p class="flight-boxes">Pickup: ${escapeHtml(source || flight.missions[0]?.source || "Pickup offen")} · Gesamt: ${escapeHtml(formatBoxSummary(flight.boxes))}</p>
-        ${renderFlightTaskList("Einladen nach Ladung", loadGroups)}
-        ${renderFlightTaskList("Ausladen nach Ziel", dropGroups)}
+        <p class="flight-boxes">${escapeHtml(t("result.flight.pickupLine", {
+          pickup: source || flight.missions[0]?.source || t("result.routePickupOpen"),
+          boxes: formatBoxSummary(flight.boxes)
+        }))}</p>
+        ${renderFlightTaskList(t("result.flightTask.load"), loadGroups)}
+        ${renderFlightTaskList(t("result.flightTask.drop"), dropGroups)}
         <details class="slot-details">
-          <summary>Slot-Belegung</summary>
+          <summary>${escapeHtml(t("result.slotDetails"))}</summary>
           <ul class="slot-list slot-list--compact">${slotList}</ul>
         </details>
         <div class="flight-actions">
           <button type="button" class="button button--primary flight-apply" data-action="apply-flight" data-flight-index="${flight.number - 1}">
-            Geliefert eintragen
+            ${escapeHtml(t("action.applyFlight"))}
           </button>
         </div>
       </article>
@@ -1805,31 +1972,37 @@
     resultSummary.innerHTML = `
       <article class="result-card">
         <div class="mission-strip">
-          <span class="route-pill">${escapeHtml(source || "Pickup offen")}</span>
+          <span class="route-pill">${escapeHtml(source || t("result.routePickupOpen"))}</span>
           <span class="route-pill route-pill--accent">${escapeHtml(plan.ship.name)}</span>
         </div>
-        <h2>Auftrags-Manifest</h2>
-        <p>${escapeHtml(cargoSummary)} mit ${formatInteger(plan.remainingSCU)} offenen SCU ueber ${formatInteger(activeDestinations)} aktive Ziele.</p>
+        <h2>${escapeHtml(t("result.manifestTitle"))}</h2>
+        <p>${escapeHtml(t("result.remainingSummary", {
+          cargo: cargoSummary,
+          remaining: formatInteger(plan.remainingSCU),
+          destinations: formatInteger(activeDestinations)
+        }))}</p>
         <div class="metric-grid">
           <div>
-            <span>Ladefluege</span>
+            <span>${escapeHtml(t("result.metric.flights"))}</span>
             <strong>${formatInteger(plan.flightsRequired)}</strong>
           </div>
           <div>
-            <span>Offen</span>
+            <span>${escapeHtml(t("result.metric.remaining"))}</span>
             <strong>${formatInteger(plan.remainingSCU)} SCU</strong>
           </div>
           <div>
-            <span>Aktive Ziele</span>
+            <span>${escapeHtml(t("result.metric.activeDestinations"))}</span>
             <strong>${formatInteger(activeDestinations)}</strong>
           </div>
           <div>
-            <span>Erledigt</span>
+            <span>${escapeHtml(t("result.metric.completed"))}</span>
             <strong>${formatInteger(completedDestinations)}</strong>
           </div>
         </div>
-        <p class="aggregate-boxes">Gesamt laden: ${escapeHtml(formatBoxSummary(plan.aggregateBoxes))}</p>
-        <p>${escapeHtml(cargoLiftMaxBoxSize == null ? "Aufzuglimit: keine Begrenzung." : `Aufzuglimit: ${cargoLiftMaxBoxSize} SCU.`)}</p>
+        <p class="aggregate-boxes">${escapeHtml(t("result.aggregateLoad", { boxes: formatBoxSummary(plan.aggregateBoxes) }))}</p>
+        <p>${escapeHtml(cargoLiftMaxBoxSize == null
+          ? t("result.liftLimit.none")
+          : t("result.liftLimit.value", { size: cargoLiftMaxBoxSize }))}</p>
       </article>
     `;
 
@@ -1842,14 +2015,17 @@
 
   function renderBlockedManifest(plan) {
     const liftTooLargeHint = plan.reason === "max-box-size-too-large"
-      ? `Der Aufzug kann Kisten bis ${formatInteger(plan.maxBoxSize)} SCU erzeugen, das Schiff nimmt aber maximal ${formatInteger(plan.maxLoadableContainerSize)}-SCU-Container auf. Eine Umverteilung in kleinere Container ist derzeit nicht moeglich.`
+      ? t("result.blocked.liftTooLarge", {
+        liftSize: formatInteger(plan.maxBoxSize),
+        shipSize: formatInteger(plan.maxLoadableContainerSize)
+      })
       : "";
     const blockingList = plan.blockingMissions?.length
-      ? plan.blockingMissions.map((mission) => `${mission.destination}: ${mission.remainingSCU} SCU`).join(", ")
-      : "Mindestens ein Auftrag passt mit den aktuellen Missionsboxen nicht exakt in einen Ladeflug.";
+      ? plan.blockingMissions.map((mission) => `${mission.destination}: ${formatInteger(mission.remainingSCU)} SCU`).join(", ")
+      : t("result.blocked.listFallback");
 
     renderError(
-      "Mindestens ein Auftrag ist mit der aktuellen Aufzugkiste oder den Slotgroessen nicht exakt planbar.",
+      t("result.blocked.generic"),
       liftTooLargeHint ? `${liftTooLargeHint} ${blockingList}` : blockingList
     );
     renderCompletedMissions(plan, plan.missions[0]?.source ?? "", plan.missions[0]?.cargo ?? "");
@@ -1860,8 +2036,11 @@
     const cargoSummary = summarizeCargoTypes(plan.completedMissions, cargoName);
     resultSummary.innerHTML = `
       <article class="result-card">
-        <h2>Alle Auftraege erledigt</h2>
-        <p>${escapeHtml(cargoSummary)} ab ${escapeHtml(source || "Pickup offen")} ist komplett geliefert.</p>
+        <h2>${escapeHtml(t("result.finishedTitle"))}</h2>
+        <p>${escapeHtml(t("result.finishedText", {
+          cargo: cargoSummary,
+          source: source || t("result.routePickupOpen")
+        }))}</p>
       </article>
     `;
     resultFlights.innerHTML = "";
@@ -1875,11 +2054,11 @@
       renderShipMeta(normalizedShip);
 
       if (!snapshot.missions.length) {
-        throw new Error("Bitte mindestens einen Auftrag eintragen.");
+        throw new Error(t("errors.needMission"));
       }
 
       if (!snapshot.boxSizes.length) {
-        throw new Error("Bitte eine gueltige maximale Kistengroesse waehlen.");
+        throw new Error(t("errors.needBoxSize"));
       }
 
       const plan = planMissionManifest({
@@ -1896,16 +2075,17 @@
       } else {
         renderManifestPlan(plan, snapshot.source, snapshot.cargoName);
       }
-
-      saveState(buildCurrentStateSnapshot());
     } catch (error) {
-      renderError(error instanceof Error ? error.message : "Unbekannter Fehler bei der Berechnung.");
+      renderError(error instanceof Error ? error.message : t("errors.unknown"));
       resultAlternative.innerHTML = "";
     }
+
+    saveState(buildCurrentStateSnapshot());
   }
 
   function buildCurrentStateSnapshot() {
     return {
+      language: currentLanguage,
       presetId: presetSelect.value,
       cargoLiftMaxBoxSize: cargoLiftMaxBoxSizeSelect.value,
       source: form.elements.source.value,
@@ -1925,8 +2105,34 @@
     renderMissionRows(example.missions.map(createMissionDraft));
   }
 
-  function hydrateFromSavedState() {
-    const initialState = readShareStateFromCurrentUrl() ?? loadState();
+  function rerenderLocalizedUi() {
+    const currentRows = missionList.children.length ? readMissionRowsFromDom() : [createMissionDraft()];
+    const currentExampleId = exampleScenarioSelect.value || DEFAULT_EXAMPLE.id;
+    const currentPresetId = presetSelect.value || DEFAULT_EXAMPLE.presetId;
+    const currentSearch = shipSearchInput.value;
+
+    populateLanguageOptions();
+    applyStaticTranslations();
+    renderBuildFooter();
+    populateExampleOptions();
+    exampleScenarioSelect.value = currentExampleId;
+    const searchPresetId = populatePresetOptions(currentSearch, currentPresetId);
+    const nextPresetId = searchPresetId ?? populatePresetOptions("", currentPresetId);
+    if (!nextPresetId) {
+      shipSearchInput.value = "";
+      return;
+    }
+
+    if (searchPresetId == null) {
+      shipSearchInput.value = "";
+    }
+
+    applyPreset(nextPresetId);
+    renderMissionRows(currentRows.map(createMissionDraft));
+    setShareStatus("");
+  }
+
+  function hydrateFromSavedState(initialState) {
     if (!initialState) {
       applyExampleState(DEFAULT_EXAMPLE);
       return;
@@ -1962,8 +2168,7 @@
       const textarea = document.createElement("textarea");
       textarea.value = shareUrl;
       textarea.setAttribute("readonly", "");
-      textarea.style.position = "fixed";
-      textarea.style.opacity = "0";
+      textarea.className = "copy-buffer";
       document.body.append(textarea);
       textarea.select();
 
@@ -1977,14 +2182,25 @@
     }
 
     setShareStatus(copied
-      ? "Share-Link kopiert."
-      : "Share-Link in der URL aktualisiert. Bei Bedarf aus der Adressleiste kopieren.");
+      ? t("share.copied")
+      : t("share.updated"));
   }
 
+  const initialState = readShareStateFromCurrentUrl() ?? loadState();
+  setLanguage(initialState?.language ?? DEFAULT_LANGUAGE);
+  populateLanguageOptions();
+  applyStaticTranslations();
+  renderBuildFooter();
   populatePresetOptions();
   populateExampleOptions();
-  hydrateFromSavedState();
+  hydrateFromSavedState(initialState);
   calculateAndRender();
+
+  languageSelect.addEventListener("change", () => {
+    setLanguage(languageSelect.value);
+    rerenderLocalizedUi();
+    calculateAndRender();
+  });
 
   shipSearchInput.addEventListener("input", () => {
     const nextPresetId = populatePresetOptions(shipSearchInput.value, presetSelect.value);

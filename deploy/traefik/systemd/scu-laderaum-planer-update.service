@@ -1,0 +1,9 @@
+[Unit]
+Description=Update SCU-Laderaum-Planer from latest GitHub release
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/rainerw/git/scu-laderaum-planer/deploy/traefik
+ExecStart=/home/rainerw/git/scu-laderaum-planer/deploy/traefik/update-release.sh

@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh SCU-Laderaum-Planer release deployment
+
+[Timer]
+OnBootSec=3m
+OnUnitActiveSec=30m
+Unit=scu-laderaum-planer-update.service
+
+[Install]
+WantedBy=timers.target

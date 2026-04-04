@@ -2,6 +2,14 @@
 
 Kleine lokale Web-App fuer Star Citizen Liefermissionen. Du waehlst ein Schiff, trägst Pickup und Auftraege ein und bekommst einen konkreten Ladeplan pro Ladeflug, inklusive Kisten pro Frachttyp und Ziel.
 
+Die UI ist zweisprachig ausgelegt: Standard ist `en`, `de` ist direkt integriert. Die Uebersetzungen liegen separat unter `translations/`, damit weitere Helfer sie leicht erweitern oder korrigieren koennen.
+
+Release-Builds blenden unten in der App ausserdem Build-Metadaten ein: Versionsnummer und GitHub-Repository.
+
+Fuer eine oeffentliche Server-Veröffentlichung liegen Beispielkonfigurationen unter `deploy/`, inklusive Sicherheits-Header fuer `nginx` und `Caddy`.
+
+Fuer Traefik gibt es zusaetzlich ein fertiges Unterpfad-Deployment unter `deploy/traefik/`, das die neueste GitHub-Release-Version lokal herunterlaedt und dann statisch ausliefert.
+
 ## Was die App berechnet
 
 - Gruppierung mehrerer Auftraege in moeglichst wenige Ladefluege
@@ -50,7 +58,32 @@ Danach liegen unter `dist/` eine `.zip`, eine `.tar.gz` und `SHA256SUMS.txt`.
 Auf GitHub:
 
 - Beim Veröffentlichen eines Releases baut `.github/workflows/release-standalone.yml` automatisch das Standalone-Archiv.
-- Die Release-Assets enthalten `index.html`, `app-standalone.js`, `styles.css`, `README.md` und eine kurze Startdatei.
+- Die Release-Assets enthalten `index.html`, `app-standalone.js`, `build-info.js`, `styles.css`, `translations/`, `README.md` und eine kurze Startdatei.
+- `build-info.js` wird im Release automatisch mit Tag und GitHub-Repository gefuellt. Fuer lokale Builds kannst du optional `REPOSITORY_URL` und `REPOSITORY_LABEL` setzen.
+
+## Sicher veroeffentlichen
+
+Wenn du die App auf einem oeffentlichen Server hostest, nutze die Header aus einer der Beispielkonfigurationen:
+
+- [nginx.conf](/home/rainerw/git/scu-laderaum-planer/deploy/nginx.conf)
+- [Caddyfile](/home/rainerw/git/scu-laderaum-planer/deploy/Caddyfile)
+
+Wichtige Punkte:
+
+- `Content-Security-Policy` sperrt Fremdskripte und Inline-Objekte.
+- `Referrer-Policy` reduziert ausgehende Metadaten.
+- `X-Content-Type-Options` und `X-Frame-Options` haerten den Browser gegen MIME-Sniffing und Framing.
+- Die App selbst bleibt weiterhin direkt per `file://` startbar; deshalb liegen die harten Header bewusst in den Server-Configs und nicht nur als HTML-Meta-Regeln vor.
+
+## Traefik auf wocher.eu
+
+Wenn du die App unter `https://sc.wocher.eu/scu-planer/` veroeffentlichen willst, liegt das passende Setup hier:
+
+- [deploy/traefik/README.md](/home/rainerw/git/scu-laderaum-planer/deploy/traefik/README.md)
+- [deploy/traefik/docker-compose.yml](/home/rainerw/git/scu-laderaum-planer/deploy/traefik/docker-compose.yml)
+- [deploy/traefik/update-release.sh](/home/rainerw/git/scu-laderaum-planer/deploy/traefik/update-release.sh)
+
+Das Setup ist fuer `https://sc.wocher.eu/scu-planer/` vorbereitet und kann per Timer regelmaessig auf die neueste GitHub-Release-Version aktualisieren.
 
 ## Nutzung
 
@@ -63,6 +96,7 @@ Auf GitHub:
 5. `Pickup leeren` setzt Pickup und Standard-Ladung zurueck. `Ziele leeren` setzt die Auftragsliste auf eine leere Zeile zurueck.
 6. Nach einem geflogenen Run im passenden Ladeflug auf `Geliefert eintragen` klicken, damit die Restmengen automatisch aktualisiert werden.
 7. Mit `Link kopieren` erzeugst du eine URL, die den kompletten aktuellen Planungszustand enthaelt.
+8. Ueber die Sprachwahl kannst du jederzeit zwischen `English` und `Deutsch` wechseln. Die Sprache wird lokal gespeichert und auch in Share-Links mitgegeben.
 
 ## Hinweise zu Schiffen und Beispielen
 
