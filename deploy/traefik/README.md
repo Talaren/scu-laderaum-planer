@@ -28,6 +28,7 @@ Wichtig:
 - `TRAEFIK_NETWORK` muss zum `--providers.docker.network` von Traefik passen.
 - In deiner Konfiguration ist das `proxy`.
 - Mit `docker network ls` findest du die vorhandenen Netzwerke.
+- Wenn dein Traefik selbst mit `network_mode: host` laeuft, ist das fuer dieses Setup in Ordnung. Entscheidend ist trotzdem das Docker-Netzwerk aus `--providers.docker.network`, also hier `proxy`.
 
 ## Erstes Deployment
 
@@ -65,6 +66,12 @@ Wenn `./deploy-latest.sh` mit `network ... declared as external, but could not b
 2. das Netzwerk suchen, das dein Traefik nutzt
 3. `TRAEFIK_NETWORK` in `.env` auf genau diesen Namen setzen
 4. `./deploy-latest.sh` erneut starten
+
+Wenn `docker compose` eine Orphan-Warnung fuer den Traefik-Container zeigt:
+
+- nicht `--remove-orphans` verwenden
+- stattdessen die aktualisierte Compose-Datei aus diesem Repo holen
+- die Datei setzt einen eigenen Projektnamen, damit dein `/opt/traefik`-Stack nicht mehr als fremdes Compose-Projekt erscheint
 
 ## Wichtige Hinweise
 

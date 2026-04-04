@@ -1,3 +1,5 @@
+name: scu-laderaum-planer
+
 services:
   scu-laderaum-planer:
     image: nginx:1.27-alpine
@@ -15,12 +17,14 @@ services:
       - traefik.http.routers.scu-laderaum-planer.rule=Host(`${APP_HOST}`) && PathPrefix(`${APP_PATH_PREFIX}/`)
       - traefik.http.routers.scu-laderaum-planer.entrypoints=websecure
       - traefik.http.routers.scu-laderaum-planer.tls=true
+      - traefik.http.routers.scu-laderaum-planer.tls.certresolver=letsencrypt
       - traefik.http.routers.scu-laderaum-planer.middlewares=scu-laderaum-planer-strip
       - traefik.http.middlewares.scu-laderaum-planer-strip.stripprefix.prefixes=${APP_PATH_PREFIX}
       - traefik.http.middlewares.scu-laderaum-planer-strip.stripprefix.forceslash=true
       - traefik.http.routers.scu-laderaum-planer-slash.rule=Host(`${APP_HOST}`) && Path(`${APP_PATH_PREFIX}`)
       - traefik.http.routers.scu-laderaum-planer-slash.entrypoints=websecure
       - traefik.http.routers.scu-laderaum-planer-slash.tls=true
+      - traefik.http.routers.scu-laderaum-planer-slash.tls.certresolver=letsencrypt
       - traefik.http.routers.scu-laderaum-planer-slash.middlewares=scu-laderaum-planer-slash-redirect
       - traefik.http.middlewares.scu-laderaum-planer-slash-redirect.redirectregex.regex=^(https?://[^/]+)${APP_PATH_PREFIX}$$
       - traefik.http.middlewares.scu-laderaum-planer-slash-redirect.redirectregex.replacement=$${1}${APP_PATH_PREFIX}/
