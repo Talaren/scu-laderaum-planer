@@ -27,35 +27,22 @@
         <form id="planner-form" novalidate>
           <div class="section-head">
             <h2>Flugprofil</h2>
-            <p>Vorlage waehlen und bei Bedarf anpassen.</p>
+            <p>Schiff waehlen und direkt losplanen.</p>
           </div>
 
           <div class="field-grid">
             <label>
+              <span>Schiff suchen</span>
+              <input id="ship-search" name="shipSearch" type="search" placeholder="z. B. RAFT, Hull, Zeus">
+            </label>
+
+            <label>
               <span>Schiff</span>
               <select id="ship-preset" name="shipPreset"></select>
-            </label>
-
-            <label>
-              <span>Anzeigename</span>
-              <input id="ship-name" name="shipName" type="text" maxlength="60">
-            </label>
-          </div>
-
-          <div class="field-grid field-grid--wide">
-            <label>
-              <span>Slot-Kapazitaeten</span>
-              <input id="slot-capacities" name="slotCapacities" type="text" placeholder="32, 32, 32">
-            </label>
-
-            <label>
-              <span>Max. Kisten pro Slot</span>
-              <input id="max-boxes-per-slot" name="maxBoxesPerSlot" type="number" min="1" step="1" placeholder="leer = flexibel">
             </label>
           </div>
 
           <div class="ship-meta">
-            <span id="cargo-model" class="badge"></span>
             <p id="ship-hint"></p>
           </div>
 
@@ -76,6 +63,10 @@
             </label>
           </div>
 
+          <div class="form-actions form-actions--compact">
+            <button type="button" class="button button--ghost" id="clear-source">Pickup leeren</button>
+          </div>
+
           <div class="section-head">
             <h2>Auftraege</h2>
             <p>Jede Zeile ist ein Ziel mit eigener Ladung, Gesamtmenge und optional bereits gelieferter SCU.</p>
@@ -85,28 +76,45 @@
 
           <div class="form-actions form-actions--compact">
             <button type="button" class="button button--ghost" id="add-mission">Auftrag hinzufuegen</button>
-            <button type="button" class="button button--ghost" id="load-quartz-example">Quartz-Beispiel</button>
-            <button type="button" class="button button--ghost" id="load-mixed-example">Gemischte Fracht</button>
+            <button type="button" class="button button--ghost" id="clear-destinations">Ziele leeren</button>
           </div>
 
           <div class="section-head">
             <h2>Kisten</h2>
-            <p>Nur Groessen aktivieren, die auf deiner Mission wirklich verfuegbar sind.</p>
+            <p>Die maximale Aufzugkiste bestimmt, welche Missionsboxen entstehen. Eine Umverteilung in kleinere Container gibt es derzeit nicht.</p>
           </div>
 
-          <div class="form-actions form-actions--compact">
-            <button type="button" class="button button--ghost" id="preset-boxes-16">Nur bis 16 SCU</button>
-            <button type="button" class="button button--ghost" id="preset-boxes-all">Alle Boxen</button>
+          <div class="field-grid">
+            <label>
+              <span>Max. Kistengroesse im Aufzug</span>
+              <select id="cargo-lift-max-box-size" name="cargoLiftMaxBoxSize">
+                <option value="">keine Begrenzung</option>
+                <option value="32">32 SCU</option>
+                <option value="24">24 SCU</option>
+                <option value="16">16 SCU</option>
+                <option value="8">8 SCU</option>
+                <option value="4">4 SCU</option>
+                <option value="2">2 SCU</option>
+                <option value="1">1 SCU</option>
+              </select>
+            </label>
           </div>
-
-          <div id="box-size-grid" class="box-size-grid"></div>
 
           <div class="form-actions">
             <button type="submit" class="button button--primary">Berechnen</button>
             <button type="button" class="button button--ghost" id="share-link">Link kopieren</button>
-            <button type="button" class="button button--ghost" id="reset-preset">Vorlage zuruecksetzen</button>
           </div>
           <p id="share-status" class="share-status" aria-live="polite"></p>
+
+          <div class="section-head section-head--tail">
+            <h2>Beispiele</h2>
+            <p>Vorbelegte Szenarien zum schnellen Ausprobieren.</p>
+          </div>
+
+          <div class="form-actions form-actions--compact">
+            <select id="example-scenario" name="exampleScenario"></select>
+            <button type="button" class="button button--ghost" id="load-example">Beispiel laden</button>
+          </div>
         </form>
       </section>
 

@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:release": "bash ./scripts/build-release.sh",
+    "check": "node --check app-standalone.js && npm test",
     "serve": "python3 -m http.server 4173",
     "test": "node --test"
   }

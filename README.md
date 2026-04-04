@@ -1,6 +1,6 @@
 # SCU-Laderaum-Planer
 
-Kleine lokale Web-App fuer Star Citizen Liefermissionen. Du waehlst ein Schiff, trägst den gemeinsamen Pickup ein, legst mehrere Auftraege mit eigener Frachtsorte, Ziel und SCU an und aktivierst nur die Kistengroessen, die fuer die Mission wirklich verfuegbar sind. Danach bekommst du einen konkreten Ladeplan pro Ladeflug.
+Kleine lokale Web-App fuer Star Citizen Liefermissionen. Du waehlst ein Schiff, trägst Pickup und Auftraege ein und bekommst einen konkreten Ladeplan pro Ladeflug, inklusive Kisten pro Frachttyp und Ziel.
 
 ## Was die App berechnet
 
@@ -8,16 +8,11 @@ Kleine lokale Web-App fuer Star Citizen Liefermissionen. Du waehlst ein Schiff, 
 - Verteilung einzelner Grossauftraege ueber viele Fluege
 - Anzahl der benoetigten Fluege
 - Kistenmix pro Flug
-- Slot-Belegung pro Flug
+- Kisten je Ladung und Ziel pro Flug
 - Beruecksichtigung bereits abgeschlossener Teilmengen
 - gemischte Frachtsorten innerhalb derselben Auftragsserie
 
-Der wichtige Punkt ist das Schiffsmodell:
-
-- flexible Frachtraeume werden als ein oder mehrere Slots mit freier Kistenkombination behandelt
-- feste Containerhalterungen wie bei der RAFT lassen sich ueber `Max. Kisten pro Slot = 1` realistisch einschraenken
-
-Dadurch kannst du beispielsweise Missionen wie `124 + 93 + 84 SCU Quartz` mit einer `RAFT 6x32` und nur `16/8/4/2/1`-Kisten so planen, dass `93 + 84` zusammen in einen Ladeflug gehen und `124` in den zweiten.
+Dadurch kannst du beispielsweise Missionen wie `48 + 32 + 32 + 176 SCU Quartz` mit einer `Argo RAFT` und nur `16/8/4/2/1`-Kisten so planen, dass drei kleine Ziele zusammen in einen Flug passen, waehrend der grosse Auftrag einen eigenen Vollflug braucht.
 
 Genauso funktioniert jetzt auch ein einzelner Grossauftrag wie `1723 SCU Processed Food` von `Baijini-Point` nach `Everus Harbor`, der automatisch ueber mehrere Ladefluege verteilt wird.
 
@@ -39,25 +34,52 @@ cd /home/rainerw/git/scu-laderaum-planer
 npm test
 ```
 
+## Release-Archiv bauen
+
+Fuer GitHub-Releases gibt es einen Standalone-Build, der alles fuer den Direktstart per `index.html` in ein Archiv packt.
+
+Lokal:
+
+```bash
+cd /home/rainerw/git/scu-laderaum-planer
+npm run build:release -- v0.1.0
+```
+
+Danach liegen unter `dist/` eine `.zip`, eine `.tar.gz` und `SHA256SUMS.txt`.
+
+Auf GitHub:
+
+- Beim Veröffentlichen eines Releases baut `.github/workflows/release-standalone.yml` automatisch das Standalone-Archiv.
+- Die Release-Assets enthalten `index.html`, `app-standalone.js`, `styles.css`, `README.md` und eine kurze Startdatei.
+
 ## Nutzung
 
-1. Schiffsvorlage waehlen.
-2. Falls noetig `Slot-Kapazitaeten` oder `Max. Kisten pro Slot` an deinen Patch anpassen.
-3. Gemeinsamen Pickup und optional eine Standard-Ladung eintragen.
-4. Pro Auftrag Ladung, Ziel, Gesamt-SCU und optional bereits gelieferte Menge erfassen.
-5. Verfuegbare Kistengroessen aktivieren.
-6. Optional `Nur bis 16 SCU` klicken, wenn der Missionsaufzug keine groesseren Kisten ausgibt.
-7. Nach einem geflogenen Run im passenden Ladeflug auf `Geliefert eintragen` klicken, damit die Restmengen automatisch aktualisiert werden.
-8. Mit `Link kopieren` erzeugst du eine URL, die den kompletten aktuellen Planungszustand enthaelt.
+1. Schiff waehlen.
+   Mit der Schiffs-Suche findest du grosse Listen schneller.
+2. Gemeinsamen Pickup und optional eine Standard-Ladung eintragen.
+3. Pro Auftrag Ladung, Ziel, Gesamt-SCU und optional bereits gelieferte Menge erfassen.
+4. Falls der Frachtaufzug limitiert ist, `Max. Kistengroesse im Aufzug` setzen.
+   Die App verwendet dann automatisch alle Boxen bis zu dieser Groesse. Ist die Aufzugkiste groesser als der groesste Schiffsslot, ist der Auftrag blockiert.
+5. `Pickup leeren` setzt Pickup und Standard-Ladung zurueck. `Ziele leeren` setzt die Auftragsliste auf eine leere Zeile zurueck.
+6. Nach einem geflogenen Run im passenden Ladeflug auf `Geliefert eintragen` klicken, damit die Restmengen automatisch aktualisiert werden.
+7. Mit `Link kopieren` erzeugst du eine URL, die den kompletten aktuellen Planungszustand enthaelt.
 
-## Hinweise zu den Vorlagen
+## Hinweise zu Schiffen und Beispielen
 
-Star Citizen aendert Cargo-Kapazitaeten und Verhalten je nach Patch. Die Vorlagen im Projekt sind deshalb absichtlich editierbar. Fuer die RAFT sind mehrere Startpunkte hinterlegt:
+Die App nutzt feste SCU-Slots pro Schiff. Fuer die RAFT gibt es genau einen Eintrag:
 
-- `ARGO RAFT (6x32 Missionscargo)` fuer Missionen mit mehreren 32-SCU-Slots und kleineren Aufzugskisten
-- `ARGO RAFT (3x32)` fuer die klassische Interpretation mit drei festen Containern
-- `ARGO RAFT (6x32)` als alternative Vorlage, falls du mit einer erweiterten Kapazitaet planst
+- `Argo RAFT` mit sechs festen `32-SCU`-Slots
 
-Fuer schnelle Tests gibt es in der UI jetzt zwei Beispielsets: Quartz-Missionen und eine gemischte Route mit `Hydrogen Fuel`, `Quantum Fuel` und `Ship Ammunition`.
+Zusaetzlich ist die Schiffsliste jetzt breit mit PDF-basierten Grid-Slots hinterlegt, unter anderem fuer RSI, Drake, Crusader, Aegis, Anvil, MISC, Origin und Argo. Korrigierte Sonderfaelle wie `Origin 600i Explorer` und `Esperia Prowler Utility` sind bereits eingepflegt.
 
-Wenn dein Schiff oder dein aktueller Patch abweicht, passt du die Werte direkt im Formular an.
+In der UI sind jetzt fuenf Beispiel-Szenarien auswaehlbar:
+
+- `Grossauftrag`
+- `Gleiche Fracht, mehrere Ziele`
+- `Gemischte Fracht mit geteiltem Ziel`
+- `RAFT: 3 kleine Ziele + 1 Vollflug`
+- `Zu kleines Schiff fuer Aufzugkiste`
+
+## Veröffentlichung
+
+Das Repository ist fuer ein öffentliches GitHub-Release vorbereitet und steht unter `GPL-3.0-only`, siehe [LICENSE](/home/rainerw/git/scu-laderaum-planer/LICENSE).

@@ -172,6 +172,10 @@ li span {
   grid-template-columns: 1.5fr 0.5fr;
 }
 
+.section-head--tail {
+  margin-top: 28px;
+}
+
 label {
   display: grid;
   gap: 8px;
@@ -418,6 +422,34 @@ select:focus {
   margin: 12px 0 16px;
 }
 
+.flight-task-group + .flight-task-group {
+  margin-top: 14px;
+}
+
+.flight-task-group h4 {
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.82rem;
+  color: var(--steel);
+}
+
+.flight-task-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.flight-task-list li {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(49, 81, 93, 0.06);
+}
+
 .flight-actions {
   margin-top: 14px;
   display: flex;
@@ -456,6 +488,27 @@ select:focus {
   padding: 12px 14px;
   border-radius: 16px;
   background: rgba(49, 81, 93, 0.06);
+}
+
+.slot-details {
+  margin-top: 14px;
+}
+
+.slot-details summary {
+  cursor: pointer;
+  color: var(--steel);
+  font-size: 0.88rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.slot-list--compact {
+  margin-top: 10px;
+  gap: 8px;
+}
+
+.slot-list--compact li {
+  padding: 10px 12px;
 }
 
 @keyframes card-rise {
