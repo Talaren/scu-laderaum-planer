@@ -311,7 +311,7 @@ select:focus {
 
 .mission-row__grid {
   display: grid;
-  grid-template-columns: 1.45fr 0.55fr 0.55fr 0.6fr;
+  grid-template-columns: 1.2fr 1.05fr 0.55fr 0.55fr 0.6fr;
   gap: 12px;
   align-items: end;
 }

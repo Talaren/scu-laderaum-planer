@@ -1,6 +1,6 @@
 # SCU-Laderaum-Planer
 
-Kleine lokale Web-App fuer Star Citizen Liefermissionen. Du waehlst ein Schiff, trägst den gemeinsamen Pickup ein, legst mehrere Auftraege mit Ziel und SCU an und aktivierst nur die Kistengroessen, die fuer die Mission wirklich verfuegbar sind. Danach bekommst du einen konkreten Ladeplan pro Ladeflug.
+Kleine lokale Web-App fuer Star Citizen Liefermissionen. Du waehlst ein Schiff, trägst den gemeinsamen Pickup ein, legst mehrere Auftraege mit eigener Frachtsorte, Ziel und SCU an und aktivierst nur die Kistengroessen, die fuer die Mission wirklich verfuegbar sind. Danach bekommst du einen konkreten Ladeplan pro Ladeflug.
 
 ## Was die App berechnet
 
@@ -9,6 +9,7 @@ Kleine lokale Web-App fuer Star Citizen Liefermissionen. Du waehlst ein Schiff, 
 - Kistenmix pro Flug
 - Slot-Belegung pro Flug
 - Beruecksichtigung bereits abgeschlossener Teilmengen
+- gemischte Frachtsorten innerhalb derselben Auftragsserie
 
 Der wichtige Punkt ist das Schiffsmodell:
 
@@ -39,8 +40,8 @@ npm test
 
 1. Schiffsvorlage waehlen.
 2. Falls noetig `Slot-Kapazitaeten` oder `Max. Kisten pro Slot` an deinen Patch anpassen.
-3. Gemeinsamen Pickup und Ladungsnamen eintragen.
-4. Pro Auftrag Ziel, Gesamt-SCU und optional bereits gelieferte Menge erfassen.
+3. Gemeinsamen Pickup und optional eine Standard-Ladung eintragen.
+4. Pro Auftrag Ladung, Ziel, Gesamt-SCU und optional bereits gelieferte Menge erfassen.
 5. Verfuegbare Kistengroessen aktivieren.
 6. Optional `Nur bis 16 SCU` klicken, wenn der Missionsaufzug keine groesseren Kisten ausgibt.
 
@@ -51,5 +52,7 @@ Star Citizen aendert Cargo-Kapazitaeten und Verhalten je nach Patch. Die Vorlage
 - `ARGO RAFT (6x32 Missionscargo)` fuer Missionen mit mehreren 32-SCU-Slots und kleineren Aufzugskisten
 - `ARGO RAFT (3x32)` fuer die klassische Interpretation mit drei festen Containern
 - `ARGO RAFT (6x32)` als alternative Vorlage, falls du mit einer erweiterten Kapazitaet planst
+
+Fuer schnelle Tests gibt es in der UI jetzt zwei Beispielsets: Quartz-Missionen und eine gemischte Route mit `Hydrogen Fuel`, `Quantum Fuel` und `Ship Ammunition`.
 
 Wenn dein Schiff oder dein aktueller Patch abweicht, passt du die Werte direkt im Formular an.

@@ -1,6 +1,6 @@
 (function () {
   const DEFAULT_BOX_SIZES = [32, 24, 16, 8, 4, 2, 1];
-  const STORAGE_KEY = "scu-laderaum-planer:v2";
+  const STORAGE_KEY = "scu-laderaum-planer:v3";
   const DESCENDING = (left, right) => right - left;
   const ASCENDING = (left, right) => left - right;
   const formatter = new Intl.NumberFormat("de-DE");
@@ -679,7 +679,7 @@
     };
   }
 
-  const DEFAULT_EXAMPLE = {
+  const QUARTZ_EXAMPLE = {
     presetId: "raft-mission-6x32",
     shipName: "ARGO RAFT (6x32 Missionscargo)",
     slotCapacities: "32, 32, 32, 32, 32, 32",
@@ -688,9 +688,25 @@
     cargoName: "Quartz",
     boxSizes: [16, 8, 4, 2, 1],
     missions: [
-      { id: "mission-1", destination: "Everus Harbor oberhalb von Hurston", totalSCU: 124, deliveredSCU: 0 },
-      { id: "mission-2", destination: "Seraphim-Station oberhalb von Crusader", totalSCU: 93, deliveredSCU: 0 },
-      { id: "mission-3", destination: "Baijini-Point oberhalb von ArcCorp", totalSCU: 84, deliveredSCU: 0 }
+      { id: "mission-1", cargoName: "Quartz", destination: "Everus Harbor oberhalb von Hurston", totalSCU: 124, deliveredSCU: 0 },
+      { id: "mission-2", cargoName: "Quartz", destination: "Seraphim-Station oberhalb von Crusader", totalSCU: 93, deliveredSCU: 0 },
+      { id: "mission-3", cargoName: "Quartz", destination: "Baijini-Point oberhalb von ArcCorp", totalSCU: 84, deliveredSCU: 0 }
+    ]
+  };
+
+  const MIXED_CARGO_EXAMPLE = {
+    presetId: "raft-mission-6x32",
+    shipName: "ARGO RAFT (6x32 Missionscargo)",
+    slotCapacities: "32, 32, 32, 32, 32, 32",
+    maxBoxesPerSlot: "",
+    source: "Everus Harbor oberhalb von Hurston",
+    cargoName: "",
+    boxSizes: [16, 8, 4, 2, 1],
+    missions: [
+      { id: "mission-1", cargoName: "Hydrogen Fuel", destination: "Melodic Fields-Station am L4-Lagrangepunkt von Hurston", totalSCU: 60, deliveredSCU: 0 },
+      { id: "mission-2", cargoName: "Quantum Fuel", destination: "High Course-Station am L5-Lagrangepunkt von Hurston", totalSCU: 136, deliveredSCU: 0 },
+      { id: "mission-3", cargoName: "Ship Ammunition", destination: "Thundering Express-Station am L3-Lagrangepunkt von Hurston", totalSCU: 137, deliveredSCU: 0 },
+      { id: "mission-4", cargoName: "Hydrogen Fuel", destination: "Green Glade-Station am L1-Lagrangepunkt von Hurston", totalSCU: 70, deliveredSCU: 0 }
     ]
   };
 
@@ -742,6 +758,7 @@
   function createMissionDraft(row = {}) {
     return {
       id: row.id ?? `mission-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      cargoName: row.cargoName ?? "",
       destination: row.destination ?? "",
       totalSCU: row.totalSCU ?? "",
       deliveredSCU: row.deliveredSCU ?? 0
@@ -761,6 +778,10 @@
               <label>
                 <span>Ziel ${index + 1}</span>
                 <input type="text" name="mission-destination" value="${escapeHtml(row.destination)}" placeholder="z. B. Seraphim-Station">
+              </label>
+              <label>
+                <span>Ladung</span>
+                <input type="text" name="mission-cargo" value="${escapeHtml(row.cargoName)}" placeholder="z. B. Quantum Fuel">
               </label>
               <label>
                 <span>Gesamt-SCU</span>
@@ -787,6 +808,7 @@
   function readMissionRowsFromDom() {
     return [...missionList.querySelectorAll(".mission-row")].map((row) => ({
       id: row.dataset.missionId,
+      cargoName: row.querySelector('input[name="mission-cargo"]').value.trim(),
       destination: row.querySelector('input[name="mission-destination"]').value.trim(),
       totalSCU: row.querySelector('input[name="mission-total"]').value,
       deliveredSCU: row.querySelector('input[name="mission-delivered"]').value
@@ -844,13 +866,13 @@
     const missionRows = readMissionRowsFromDom();
 
     const missions = missionRows
-      .filter((row) => row.destination || row.totalSCU || row.deliveredSCU)
+      .filter((row) => row.destination || row.cargoName || row.totalSCU || row.deliveredSCU)
       .map((row, index) => ({
         id: row.id,
         label: row.destination || `Auftrag ${index + 1}`,
         source,
         destination: row.destination,
-        cargo: cargoName,
+        cargo: row.cargoName || cargoName,
         totalSCU: Number.parseInt(row.totalSCU, 10),
         deliveredSCU: Number.parseInt(row.deliveredSCU || "0", 10) || 0
       }));
@@ -919,7 +941,7 @@
               <li>
                 <strong>${escapeHtml(mission.destination)}</strong>
                 <span>${formatInteger(mission.totalSCU)} SCU abgeschlossen</span>
-                <span>${escapeHtml(cargoName || mission.cargo || "Fracht")} von ${escapeHtml(source || mission.source || "Pickup offen")}</span>
+                <span>${escapeHtml(mission.cargo || cargoName || "Fracht")} von ${escapeHtml(source || mission.source || "Pickup offen")}</span>
               </li>
             `).join("")}
           </ul>
@@ -935,6 +957,24 @@
     `);
 
     resultAlternative.innerHTML = sections.join("");
+  }
+
+  function summarizeCargoTypes(missions, fallbackCargo = "") {
+    const cargoTypes = [...new Set(
+      missions
+        .map((mission) => mission.cargo?.trim())
+        .filter(Boolean)
+    )];
+
+    if (!cargoTypes.length) {
+      return fallbackCargo || "Fracht";
+    }
+
+    if (cargoTypes.length <= 3) {
+      return cargoTypes.join(", ");
+    }
+
+    return `${cargoTypes.length} Frachttypen`;
   }
 
   function renderFlightCard(flight, cargoName, source) {
@@ -953,7 +993,7 @@
         <li>
           <strong>${escapeHtml(mission.destination)}</strong>
           <span>${formatInteger(mission.remainingSCU)} SCU</span>
-          <span>${escapeHtml(cargoName || mission.cargo || "Fracht")} ab ${escapeHtml(source || mission.source || "Pickup offen")}</span>
+          <span>${escapeHtml(mission.cargo || cargoName || "Fracht")} ab ${escapeHtml(source || mission.source || "Pickup offen")}</span>
         </li>
       `)
       .join("");
@@ -974,6 +1014,7 @@
   function renderManifestPlan(plan, source, cargoName) {
     const activeDestinations = plan.activeMissions.length;
     const completedDestinations = plan.completedMissions.length;
+    const cargoSummary = summarizeCargoTypes(plan.activeMissions, cargoName);
 
     resultSummary.innerHTML = `
       <article class="result-card">
@@ -982,7 +1023,7 @@
           <span class="route-pill route-pill--accent">${escapeHtml(plan.ship.name)}</span>
         </div>
         <h2>Auftrags-Manifest</h2>
-        <p>${escapeHtml(cargoName || "Fracht")} mit ${formatInteger(plan.remainingSCU)} offenen SCU ueber ${formatInteger(activeDestinations)} aktive Ziele.</p>
+        <p>${escapeHtml(cargoSummary)} mit ${formatInteger(plan.remainingSCU)} offenen SCU ueber ${formatInteger(activeDestinations)} aktive Ziele.</p>
         <div class="metric-grid">
           <div>
             <span>Ladefluege</span>
@@ -1022,10 +1063,11 @@
   }
 
   function renderFinishedManifest(plan, source, cargoName) {
+    const cargoSummary = summarizeCargoTypes(plan.completedMissions, cargoName);
     resultSummary.innerHTML = `
       <article class="result-card">
         <h2>Alle Auftraege erledigt</h2>
-        <p>${escapeHtml(cargoName || "Fracht")} ab ${escapeHtml(source || "Pickup offen")} ist komplett geliefert.</p>
+        <p>${escapeHtml(cargoSummary)} ab ${escapeHtml(source || "Pickup offen")} ist komplett geliefert.</p>
       </article>
     `;
     resultFlights.innerHTML = "";
@@ -1076,33 +1118,33 @@
     }
   }
 
-  function applyExampleState() {
-    renderBoxSizes(DEFAULT_EXAMPLE.boxSizes);
-    applyPreset(DEFAULT_EXAMPLE.presetId, false);
-    shipNameInput.value = DEFAULT_EXAMPLE.shipName;
-    slotCapacitiesInput.value = DEFAULT_EXAMPLE.slotCapacities;
-    maxBoxesInput.value = DEFAULT_EXAMPLE.maxBoxesPerSlot;
-    form.elements.source.value = DEFAULT_EXAMPLE.source;
-    form.elements.cargoName.value = DEFAULT_EXAMPLE.cargoName;
-    renderMissionRows(DEFAULT_EXAMPLE.missions.map(createMissionDraft));
+  function applyExampleState(example) {
+    renderBoxSizes(example.boxSizes);
+    applyPreset(example.presetId, false);
+    shipNameInput.value = example.shipName;
+    slotCapacitiesInput.value = example.slotCapacities;
+    maxBoxesInput.value = example.maxBoxesPerSlot;
+    form.elements.source.value = example.source;
+    form.elements.cargoName.value = example.cargoName;
+    renderMissionRows(example.missions.map(createMissionDraft));
   }
 
   function hydrateFromSavedState() {
     const saved = loadState();
     if (!saved) {
-      applyExampleState();
+      applyExampleState(QUARTZ_EXAMPLE);
       return;
     }
 
-    renderBoxSizes(saved.boxSizes?.length ? saved.boxSizes : DEFAULT_EXAMPLE.boxSizes);
-    applyPreset(saved.presetId ?? DEFAULT_EXAMPLE.presetId, false);
+    renderBoxSizes(saved.boxSizes?.length ? saved.boxSizes : QUARTZ_EXAMPLE.boxSizes);
+    applyPreset(saved.presetId ?? QUARTZ_EXAMPLE.presetId, false);
 
     shipNameInput.value = saved.shipName ?? shipNameInput.value;
     slotCapacitiesInput.value = saved.slotCapacities ?? slotCapacitiesInput.value;
     maxBoxesInput.value = saved.maxBoxesPerSlot ?? maxBoxesInput.value;
-    form.elements.source.value = saved.source ?? DEFAULT_EXAMPLE.source;
-    form.elements.cargoName.value = saved.cargoName ?? DEFAULT_EXAMPLE.cargoName;
-    renderMissionRows((saved.missions?.length ? saved.missions : DEFAULT_EXAMPLE.missions).map(createMissionDraft));
+    form.elements.source.value = saved.source ?? QUARTZ_EXAMPLE.source;
+    form.elements.cargoName.value = saved.cargoName ?? QUARTZ_EXAMPLE.cargoName;
+    renderMissionRows((saved.missions?.length ? saved.missions : QUARTZ_EXAMPLE.missions).map(createMissionDraft));
   }
 
   function setBoxSelection(predicate) {
@@ -1133,8 +1175,13 @@
     calculateAndRender();
   });
 
-  document.querySelector("#load-example").addEventListener("click", () => {
-    applyExampleState();
+  document.querySelector("#load-quartz-example").addEventListener("click", () => {
+    applyExampleState(QUARTZ_EXAMPLE);
+    calculateAndRender();
+  });
+
+  document.querySelector("#load-mixed-example").addEventListener("click", () => {
+    applyExampleState(MIXED_CARGO_EXAMPLE);
     calculateAndRender();
   });
 

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { buildFlightPlans, planMission, planMissionManifest } from "../lib/planner.js";
+import { SHIP_PRESETS } from "../data/ships.js";
 
 test("RAFT 3x32 liefert 93 SCU exakt in zwei Fluegen", () => {
   const ship = {
@@ -138,4 +139,32 @@ test("Manifest ignoriert bereits abgeschlossene Missionen", () => {
   assert.equal(manifest.reachable, true);
   assert.equal(manifest.flightsRequired, 2);
   assert.deepEqual(manifest.flights.map((flight) => flight.total), [124, 93]);
+});
+
+test("Gemischte Fracht bleibt pro Auftrag erhalten", () => {
+  const manifest = planMissionManifest({
+    ship: {
+      name: "ARGO RAFT 6x32 Mission Cargo",
+      slotCapacities: [32, 32, 32, 32, 32, 32],
+      maxBoxesPerSlot: null
+    },
+    boxSizes: [16, 8, 4, 2, 1],
+    missions: [
+      { label: "Melodic Fields", cargo: "Hydrogen Fuel", destination: "Melodic Fields", totalSCU: 60 },
+      { label: "High Course", cargo: "Quantum Fuel", destination: "High Course", totalSCU: 136 },
+      { label: "Thundering Express", cargo: "Ship Ammunition", destination: "Thundering Express", totalSCU: 137 },
+      { label: "Green Glade", cargo: "Hydrogen Fuel", destination: "Green Glade", totalSCU: 70 }
+    ]
+  });
+
+  assert.equal(manifest.reachable, true);
+  assert.equal(manifest.flightsRequired, 3);
+  assert.deepEqual(manifest.flights.map((flight) => flight.total), [137, 136, 130]);
+  assert.deepEqual(manifest.flights[2].missions.map((mission) => mission.cargo), ["Hydrogen Fuel", "Hydrogen Fuel"]);
+  assert.deepEqual(manifest.flights[2].missions.map((mission) => mission.remainingSCU), [60, 70]);
+});
+
+test("Datenmodell enthaelt drei RAFT-Presets", () => {
+  const raftPresets = SHIP_PRESETS.filter((preset) => preset.name.includes("RAFT"));
+  assert.equal(raftPresets.length, 3);
 });
