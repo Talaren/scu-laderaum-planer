@@ -20,7 +20,7 @@ Danach in `.env` mindestens setzen:
 
 - `APP_HOST=sc.wocher.eu`
 - `APP_PATH_PREFIX=/scu-planer`
-- `GITHUB_REPOSITORY=<dein-github-user>/<dein-repo>`
+- `GITHUB_REPOSITORY=Talaren/scu-laderaum-planer`
 - `TRAEFIK_NETWORK=<dein-traefik-docker-netzwerk>`
 
 ## Erstes Deployment
