@@ -1763,19 +1763,19 @@
         return `
           <article class="mission-row" data-mission-id="${escapeHtml(row.id)}">
             <div class="mission-row__grid">
-              <label>
+              <label class="mission-row__field mission-row__field--destination">
                 <span>${escapeHtml(t("mission.destinationLabel", { index: index + 1 }))}</span>
                 <input type="text" name="mission-destination" value="${escapeHtml(row.destination)}" placeholder="${escapeHtml(t("placeholder.destination"))}">
               </label>
-              <label>
+              <label class="mission-row__field mission-row__field--cargo">
                 <span>${escapeHtml(t("mission.cargoLabel"))}</span>
                 <input type="text" name="mission-cargo" value="${escapeHtml(row.cargoName)}" placeholder="${escapeHtml(t("placeholder.cargo"))}">
               </label>
-              <label>
+              <label class="mission-row__field mission-row__field--total">
                 <span>${escapeHtml(t("mission.totalLabel"))}</span>
                 <input type="number" name="mission-total" min="1" step="1" value="${escapeHtml(row.totalSCU)}" placeholder="${escapeHtml(t("placeholder.total"))}">
               </label>
-              <label>
+              <label class="mission-row__field mission-row__field--delivered">
                 <span>${escapeHtml(t("mission.deliveredLabel"))}</span>
                 <input type="number" name="mission-delivered" min="0" step="1" value="${escapeHtml(row.deliveredSCU)}" placeholder="${escapeHtml(t("placeholder.delivered"))}">
               </label>
@@ -1783,9 +1783,9 @@
                 <span>${escapeHtml(t("mission.remainingLabel"))}</span>
                 <strong data-role="remaining">${formatInteger(remainingSCU)} SCU</strong>
               </div>
-            </div>
-            <div class="mission-row__actions">
-              <button type="button" class="button button--ghost mission-row__remove" data-action="remove-mission">${escapeHtml(t("action.removeMission"))}</button>
+              <div class="mission-row__actions">
+                <button type="button" class="button button--ghost mission-row__remove" data-action="remove-mission">${escapeHtml(t("action.removeMission"))}</button>
+              </div>
             </div>
           </article>
         `;

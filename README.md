@@ -50,7 +50,7 @@ Lokal:
 
 ```bash
 cd /home/rainerw/git/scu-laderaum-planer
-npm run build:release -- v0.1.3
+npm run build:release -- v0.1.4
 ```
 
 Danach liegen unter `dist/` eine `.zip`, eine `.tar.gz` und `SHA256SUMS.txt`.
