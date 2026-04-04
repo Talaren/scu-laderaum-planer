@@ -39,9 +39,9 @@ npm test
 
 1. Schiffsvorlage waehlen.
 2. Falls noetig `Slot-Kapazitaeten` oder `Max. Kisten pro Slot` an deinen Patch anpassen.
-3. Quelle, Ziel und Missionsmenge eintragen.
-4. Verfuegbare Kistengroessen aktivieren.
-5. Bereits gelieferte Mengen bei Bedarf eintragen.
+3. Gemeinsamen Pickup und Ladungsnamen eintragen.
+4. Pro Auftrag Ziel, Gesamt-SCU und optional bereits gelieferte Menge erfassen.
+5. Verfuegbare Kistengroessen aktivieren.
 6. Optional `Nur bis 16 SCU` klicken, wenn der Missionsaufzug keine groesseren Kisten ausgibt.
 
 ## Hinweise zu den Vorlagen
