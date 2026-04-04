@@ -25,6 +25,8 @@ python3 -m http.server 4173
 
 Danach im Browser `http://localhost:4173` oeffnen.
 
+Direktstart ohne Webserver ist ebenfalls moeglich: `index.html` kann jetzt auch direkt per Doppelklick oder via `file:///.../index.html` geoeffnet werden.
+
 ## Tests
 
 ```bash
