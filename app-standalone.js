@@ -782,6 +782,7 @@
   const resultSummary = document.querySelector("#result-summary");
   const resultFlights = document.querySelector("#result-flights");
   const resultAlternative = document.querySelector("#result-alternative");
+  let lastRenderedPlan = null;
 
   function escapeHtml(value) {
     return String(value)
@@ -967,6 +968,32 @@
     }
   }
 
+  function applyFlightDeliveryToRows(missionRows, flightMissions) {
+    const increments = new Map();
+
+    for (const flightMission of flightMissions) {
+      const missionId = flightMission?.id;
+      const amount = Math.max(0, Math.trunc(Number(flightMission?.remainingSCU ?? 0)));
+
+      if (!missionId || amount <= 0) {
+        continue;
+      }
+
+      increments.set(missionId, (increments.get(missionId) ?? 0) + amount);
+    }
+
+    return missionRows.map((row) => {
+      const totalSCU = Math.max(0, Number.parseInt(row.totalSCU || "0", 10) || 0);
+      const deliveredSCU = Math.max(0, Number.parseInt(row.deliveredSCU || "0", 10) || 0);
+      const increment = increments.get(row.id) ?? 0;
+
+      return {
+        ...row,
+        deliveredSCU: Math.min(totalSCU, deliveredSCU + increment)
+      };
+    });
+  }
+
   function describeMaxBoxes(limit) {
     return limit === Number.POSITIVE_INFINITY ? "beliebig viele" : String(limit);
   }
@@ -979,6 +1006,7 @@
   }
 
   function renderError(message, details = "") {
+    lastRenderedPlan = null;
     resultSummary.innerHTML = `
       <article class="result-card result-card--alert">
         <h2>Berechnung blockiert</h2>
@@ -1067,11 +1095,17 @@
         <p class="flight-boxes">Boxen: ${escapeHtml(formatBoxSummary(flight.boxes))}</p>
         <ul class="manifest-list">${missionListMarkup}</ul>
         <ul class="slot-list">${slotList}</ul>
+        <div class="flight-actions">
+          <button type="button" class="button button--primary flight-apply" data-action="apply-flight" data-flight-index="${flight.number - 1}">
+            Geliefert eintragen
+          </button>
+        </div>
       </article>
     `;
   }
 
   function renderManifestPlan(plan, source, cargoName) {
+    lastRenderedPlan = plan;
     const activeDestinations = plan.activeMissions.length;
     const completedDestinations = plan.completedMissions.length;
     const cargoSummary = summarizeCargoTypes(plan.activeMissions, cargoName);
@@ -1123,6 +1157,7 @@
   }
 
   function renderFinishedManifest(plan, source, cargoName) {
+    lastRenderedPlan = plan;
     const cargoSummary = summarizeCargoTypes(plan.completedMissions, cargoName);
     resultSummary.innerHTML = `
       <article class="result-card">
@@ -1251,6 +1286,27 @@
 
   document.querySelector("#preset-boxes-all").addEventListener("click", () => {
     setBoxSelection(() => true);
+  });
+
+  resultFlights.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLButtonElement)) {
+      return;
+    }
+
+    if (target.dataset.action !== "apply-flight") {
+      return;
+    }
+
+    const flightIndex = Number.parseInt(target.dataset.flightIndex || "", 10);
+    const flight = lastRenderedPlan?.flights?.[flightIndex];
+    if (!flight) {
+      return;
+    }
+
+    const updatedRows = applyFlightDeliveryToRows(readMissionRowsFromDom(), flight.missions);
+    renderMissionRows(updatedRows);
+    calculateAndRender();
   });
 
   missionList.addEventListener("click", (event) => {

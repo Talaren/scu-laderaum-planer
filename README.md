@@ -47,6 +47,7 @@ npm test
 4. Pro Auftrag Ladung, Ziel, Gesamt-SCU und optional bereits gelieferte Menge erfassen.
 5. Verfuegbare Kistengroessen aktivieren.
 6. Optional `Nur bis 16 SCU` klicken, wenn der Missionsaufzug keine groesseren Kisten ausgibt.
+7. Nach einem geflogenen Run im passenden Ladeflug auf `Geliefert eintragen` klicken, damit die Restmengen automatisch aktualisiert werden.
 
 ## Hinweise zu den Vorlagen
 

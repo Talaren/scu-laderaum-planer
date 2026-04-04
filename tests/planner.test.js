@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildFlightPlans, planMission, planMissionManifest } from "../lib/planner.js";
+import { applyFlightDelivery, buildFlightPlans, planMission, planMissionManifest } from "../lib/planner.js";
 import { SHIP_PRESETS } from "../data/ships.js";
 
 test("RAFT 3x32 liefert 93 SCU exakt in zwei Fluegen", () => {
@@ -159,6 +159,38 @@ test("Einzelauftrag darf ueber viele Fluege verteilt werden", () => {
   assert.deepEqual(manifest.flights.map((flight) => flight.total), [192, 192, 192, 192, 192, 192, 192, 192, 187]);
   assert.ok(manifest.flights.every((flight) => flight.missions.length === 1));
   assert.ok(manifest.flights.every((flight) => flight.missions[0].cargo === "Processed Food"));
+});
+
+test("Gelieferter Ladeflug traegt die Mengen in die passenden Missionen ein", () => {
+  const updated = applyFlightDelivery(
+    [
+      { id: "mission-a", cargo: "Quartz", destination: "Seraphim", totalSCU: 93, deliveredSCU: 0 },
+      { id: "mission-b", cargo: "Quartz", destination: "Baijini", totalSCU: 84, deliveredSCU: 12 }
+    ],
+    [
+      { id: "mission-a", remainingSCU: 93 },
+      { id: "mission-b", remainingSCU: 72 }
+    ]
+  );
+
+  assert.equal(updated[0].deliveredSCU, 93);
+  assert.equal(updated[0].remainingSCU, 0);
+  assert.equal(updated[1].deliveredSCU, 84);
+  assert.equal(updated[1].remainingSCU, 0);
+});
+
+test("Gelieferter Teilflug eines Grossauftrags addiert nur dessen Anteil", () => {
+  const updated = applyFlightDelivery(
+    [
+      { id: "mission-food", cargo: "Processed Food", destination: "Everus Harbor", totalSCU: 1723, deliveredSCU: 384 }
+    ],
+    [
+      { id: "mission-food", remainingSCU: 192 }
+    ]
+  );
+
+  assert.equal(updated[0].deliveredSCU, 576);
+  assert.equal(updated[0].remainingSCU, 1147);
 });
 
 test("Gemischte Fracht bleibt pro Auftrag erhalten", () => {
