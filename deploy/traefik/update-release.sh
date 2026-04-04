@@ -105,8 +105,7 @@ rm -rf "${TARGET_RELEASE_DIR}"
 mkdir -p "${TARGET_RELEASE_DIR}"
 cp -a "${EXTRACTED_APP_DIR}/." "${TARGET_RELEASE_DIR}/"
 
-rm -rf "${CURRENT_DIR}"
-mkdir -p "${CURRENT_DIR}"
+find "${CURRENT_DIR}" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
 cp -a "${TARGET_RELEASE_DIR}/." "${CURRENT_DIR}/"
 
 printf '%s\n' "${LATEST_TAG}" > "${CURRENT_VERSION_FILE}"

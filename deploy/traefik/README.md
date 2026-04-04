@@ -50,13 +50,20 @@ Wenn dein Server `systemd` nutzt, kannst du die Timer-Dateien unter `systemd/` v
 Beispiel:
 
 ```bash
+sudo cp systemd/scu-laderaum-planer-update.env.example /etc/default/scu-laderaum-planer-update
 sudo cp systemd/scu-laderaum-planer-update.service /etc/systemd/system/
 sudo cp systemd/scu-laderaum-planer-update.timer /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now scu-laderaum-planer-update.timer
 ```
 
-Der Timer ruft regelmaessig nur `update-release.sh` auf. Der laufende `nginx`-Container bedient danach automatisch den aktualisierten lokalen Stand aus `runtime/current/`.
+Danach in `/etc/default/scu-laderaum-planer-update` den echten Deploy-Pfad setzen, zum Beispiel:
+
+```bash
+DEPLOY_DIR=/home/rainerw/scu-laderaum-planer/deploy/traefik
+```
+
+Der Timer ruft regelmaessig `deploy-latest.sh` auf. Damit werden neue Releases heruntergeladen und der Container zugleich sauber mit dem aktuellen Stand abgeglichen.
 
 ## Fehlerbehebung
 

@@ -4,6 +4,7 @@ Description=Refresh SCU-Laderaum-Planer release deployment
 [Timer]
 OnBootSec=3m
 OnUnitActiveSec=30m
+Persistent=true
 Unit=scu-laderaum-planer-update.service
 
 [Install]

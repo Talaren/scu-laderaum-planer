@@ -5,5 +5,5 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-WorkingDirectory=/home/rainerw/git/scu-laderaum-planer/deploy/traefik
-ExecStart=/home/rainerw/git/scu-laderaum-planer/deploy/traefik/update-release.sh
+EnvironmentFile=-/etc/default/scu-laderaum-planer-update
+ExecStart=/bin/bash -lc 'exec "${DEPLOY_DIR:?Please set DEPLOY_DIR in /etc/default/scu-laderaum-planer-update}/deploy-latest.sh"'
