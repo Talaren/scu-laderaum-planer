@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { applyFlightDelivery, buildFlightPlans, planMission, planMissionManifest } from "../lib/planner.js";
+import { buildShareUrl, readShareStateFromUrl } from "../lib/share-state.js";
 import { SHIP_PRESETS } from "../data/ships.js";
 
 test("RAFT 3x32 liefert 93 SCU exakt in zwei Fluegen", () => {
@@ -219,4 +220,30 @@ test("Gemischte Fracht bleibt pro Auftrag erhalten", () => {
 test("Datenmodell enthaelt drei RAFT-Presets", () => {
   const raftPresets = SHIP_PRESETS.filter((preset) => preset.name.includes("RAFT"));
   assert.equal(raftPresets.length, 3);
+});
+
+test("Share-State laesst sich per URL roundtrippen", () => {
+  const state = {
+    presetId: "raft-mission-6x32",
+    shipName: "ARGO RAFT",
+    slotCapacities: "32, 32, 32, 32, 32, 32",
+    maxBoxesPerSlot: "",
+    source: "Baijini-Point",
+    cargoName: "",
+    boxSizes: [16, 8, 4, 2, 1],
+    missions: [
+      {
+        id: "mission-food",
+        cargoName: "Processed Food",
+        destination: "Everus Harbor",
+        totalSCU: "1723",
+        deliveredSCU: 384
+      }
+    ]
+  };
+
+  const url = buildShareUrl("file:///home/rainerw/git/scu-laderaum-planer/index.html", state);
+  const decoded = readShareStateFromUrl(url);
+
+  assert.deepEqual(decoded, state);
 });

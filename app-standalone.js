@@ -782,6 +782,7 @@
   const resultSummary = document.querySelector("#result-summary");
   const resultFlights = document.querySelector("#result-flights");
   const resultAlternative = document.querySelector("#result-alternative");
+  const shareStatus = document.querySelector("#share-status");
   let lastRenderedPlan = null;
 
   function escapeHtml(value) {
@@ -966,6 +967,85 @@
     } catch {
       return null;
     }
+  }
+
+  function sanitizeShareState(state) {
+    return {
+      presetId: state?.presetId ?? "",
+      shipName: state?.shipName ?? "",
+      slotCapacities: state?.slotCapacities ?? "",
+      maxBoxesPerSlot: state?.maxBoxesPerSlot ?? "",
+      source: state?.source ?? "",
+      cargoName: state?.cargoName ?? "",
+      boxSizes: Array.isArray(state?.boxSizes) ? state.boxSizes : [],
+      missions: Array.isArray(state?.missions)
+        ? state.missions.map((mission) => ({
+          id: mission?.id ?? "",
+          cargoName: mission?.cargoName ?? "",
+          destination: mission?.destination ?? "",
+          totalSCU: mission?.totalSCU ?? "",
+          deliveredSCU: mission?.deliveredSCU ?? 0
+        }))
+        : []
+    };
+  }
+
+  function encodeBase64Url(text) {
+    const bytes = new TextEncoder().encode(text);
+    let binary = "";
+
+    for (const byte of bytes) {
+      binary += String.fromCharCode(byte);
+    }
+
+    return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+  }
+
+  function decodeBase64Url(value) {
+    const base64 = value
+      .replaceAll("-", "+")
+      .replaceAll("_", "/")
+      .padEnd(Math.ceil(value.length / 4) * 4, "=");
+    const binary = atob(base64);
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  }
+
+  function encodeShareState(state) {
+    return encodeBase64Url(JSON.stringify({
+      version: 1,
+      state: sanitizeShareState(state)
+    }));
+  }
+
+  function decodeShareState(encoded) {
+    try {
+      const payload = JSON.parse(decodeBase64Url(encoded));
+      if (payload?.version !== 1 || typeof payload?.state !== "object" || !payload.state) {
+        return null;
+      }
+
+      return sanitizeShareState(payload.state);
+    } catch {
+      return null;
+    }
+  }
+
+  function buildShareUrl(baseUrl, state) {
+    const url = new URL(baseUrl);
+    url.hash = `share=${encodeShareState(state)}`;
+    return url.toString();
+  }
+
+  function readShareStateFromCurrentUrl() {
+    const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
+    const params = new URLSearchParams(hash);
+    const encoded = params.get("share");
+    return encoded ? decodeShareState(encoded) : null;
+  }
+
+  function setShareStatus(message) {
+    shareStatus.textContent = message;
   }
 
   function applyFlightDeliveryToRows(missionRows, flightMissions) {
@@ -1197,20 +1277,24 @@
         renderManifestPlan(plan, snapshot.source, snapshot.cargoName);
       }
 
-      saveState({
-        presetId: snapshot.presetId,
-        shipName: shipNameInput.value,
-        slotCapacities: slotCapacitiesInput.value,
-        maxBoxesPerSlot: maxBoxesInput.value,
-        source: snapshot.source,
-        cargoName: snapshot.cargoName,
-        boxSizes: snapshot.boxSizes,
-        missions: readMissionRowsFromDom()
-      });
+      saveState(buildCurrentStateSnapshot());
     } catch (error) {
       renderError(error instanceof Error ? error.message : "Unbekannter Fehler bei der Berechnung.");
       resultAlternative.innerHTML = "";
     }
+  }
+
+  function buildCurrentStateSnapshot() {
+    return {
+      presetId: presetSelect.value,
+      shipName: shipNameInput.value,
+      slotCapacities: slotCapacitiesInput.value,
+      maxBoxesPerSlot: maxBoxesInput.value,
+      source: form.elements.source.value,
+      cargoName: form.elements.cargoName.value,
+      boxSizes: getSelectedBoxSizes(),
+      missions: readMissionRowsFromDom()
+    };
   }
 
   function applyExampleState(example) {
@@ -1225,21 +1309,59 @@
   }
 
   function hydrateFromSavedState() {
-    const saved = loadState();
-    if (!saved) {
+    const initialState = readShareStateFromCurrentUrl() ?? loadState();
+    if (!initialState) {
       applyExampleState(QUARTZ_EXAMPLE);
       return;
     }
 
-    renderBoxSizes(saved.boxSizes?.length ? saved.boxSizes : QUARTZ_EXAMPLE.boxSizes);
-    applyPreset(saved.presetId ?? QUARTZ_EXAMPLE.presetId, false);
+    renderBoxSizes(initialState.boxSizes?.length ? initialState.boxSizes : QUARTZ_EXAMPLE.boxSizes);
+    applyPreset(initialState.presetId ?? QUARTZ_EXAMPLE.presetId, false);
 
-    shipNameInput.value = saved.shipName ?? shipNameInput.value;
-    slotCapacitiesInput.value = saved.slotCapacities ?? slotCapacitiesInput.value;
-    maxBoxesInput.value = saved.maxBoxesPerSlot ?? maxBoxesInput.value;
-    form.elements.source.value = saved.source ?? QUARTZ_EXAMPLE.source;
-    form.elements.cargoName.value = saved.cargoName ?? QUARTZ_EXAMPLE.cargoName;
-    renderMissionRows((saved.missions?.length ? saved.missions : QUARTZ_EXAMPLE.missions).map(createMissionDraft));
+    shipNameInput.value = initialState.shipName ?? shipNameInput.value;
+    slotCapacitiesInput.value = initialState.slotCapacities ?? slotCapacitiesInput.value;
+    maxBoxesInput.value = initialState.maxBoxesPerSlot ?? maxBoxesInput.value;
+    form.elements.source.value = initialState.source ?? QUARTZ_EXAMPLE.source;
+    form.elements.cargoName.value = initialState.cargoName ?? QUARTZ_EXAMPLE.cargoName;
+    renderMissionRows((initialState.missions?.length ? initialState.missions : QUARTZ_EXAMPLE.missions).map(createMissionDraft));
+  }
+
+  async function copyShareLink() {
+    const shareUrl = buildShareUrl(window.location.href, buildCurrentStateSnapshot());
+    window.history.replaceState(null, "", shareUrl);
+
+    let copied = false;
+
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        copied = true;
+      } catch {
+        copied = false;
+      }
+    }
+
+    if (!copied) {
+      const textarea = document.createElement("textarea");
+      textarea.value = shareUrl;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.append(textarea);
+      textarea.select();
+
+      try {
+        copied = document.execCommand("copy");
+      } catch {
+        copied = false;
+      }
+
+      textarea.remove();
+    }
+
+    setShareStatus(copied
+      ? "Share-Link kopiert."
+      : "Share-Link in der URL aktualisiert. Bei Bedarf aus der Adressleiste kopieren.");
   }
 
   function setBoxSelection(predicate) {
@@ -1261,6 +1383,10 @@
   document.querySelector("#reset-preset").addEventListener("click", () => {
     applyPreset(presetSelect.value);
     calculateAndRender();
+  });
+
+  document.querySelector("#share-link").addEventListener("click", () => {
+    copyShareLink();
   });
 
   document.querySelector("#add-mission").addEventListener("click", () => {
