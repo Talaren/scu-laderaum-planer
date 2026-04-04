@@ -5,6 +5,7 @@ Kleine lokale Web-App fuer Star Citizen Liefermissionen. Du waehlst ein Schiff, 
 ## Was die App berechnet
 
 - Gruppierung mehrerer Auftraege in moeglichst wenige Ladefluege
+- Verteilung einzelner Grossauftraege ueber viele Fluege
 - Anzahl der benoetigten Fluege
 - Kistenmix pro Flug
 - Slot-Belegung pro Flug
@@ -17,6 +18,8 @@ Der wichtige Punkt ist das Schiffsmodell:
 - feste Containerhalterungen wie bei der RAFT lassen sich ueber `Max. Kisten pro Slot = 1` realistisch einschraenken
 
 Dadurch kannst du beispielsweise Missionen wie `124 + 93 + 84 SCU Quartz` mit einer `RAFT 6x32` und nur `16/8/4/2/1`-Kisten so planen, dass `93 + 84` zusammen in einen Ladeflug gehen und `124` in den zweiten.
+
+Genauso funktioniert jetzt auch ein einzelner Grossauftrag wie `1723 SCU Processed Food` von `Baijini-Point` nach `Everus Harbor`, der automatisch ueber mehrere Ladefluege verteilt wird.
 
 ## Projekt starten
 

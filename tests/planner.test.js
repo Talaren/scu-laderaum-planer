@@ -141,6 +141,26 @@ test("Manifest ignoriert bereits abgeschlossene Missionen", () => {
   assert.deepEqual(manifest.flights.map((flight) => flight.total), [124, 93]);
 });
 
+test("Einzelauftrag darf ueber viele Fluege verteilt werden", () => {
+  const manifest = planMissionManifest({
+    ship: {
+      name: "ARGO RAFT 6x32 Mission Cargo",
+      slotCapacities: [32, 32, 32, 32, 32, 32],
+      maxBoxesPerSlot: null
+    },
+    boxSizes: [16, 8, 4, 2, 1],
+    missions: [
+      { label: "Everus Harbor", cargo: "Processed Food", destination: "Everus Harbor", totalSCU: 1723 }
+    ]
+  });
+
+  assert.equal(manifest.reachable, true);
+  assert.equal(manifest.flightsRequired, 9);
+  assert.deepEqual(manifest.flights.map((flight) => flight.total), [192, 192, 192, 192, 192, 192, 192, 192, 187]);
+  assert.ok(manifest.flights.every((flight) => flight.missions.length === 1));
+  assert.ok(manifest.flights.every((flight) => flight.missions[0].cargo === "Processed Food"));
+});
+
 test("Gemischte Fracht bleibt pro Auftrag erhalten", () => {
   const manifest = planMissionManifest({
     ship: {
