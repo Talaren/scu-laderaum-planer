@@ -21,7 +21,13 @@ Danach in `.env` mindestens setzen:
 - `APP_HOST=sc.wocher.eu`
 - `APP_PATH_PREFIX=/scu-planer`
 - `GITHUB_REPOSITORY=Talaren/scu-laderaum-planer`
-- `TRAEFIK_NETWORK=<dein-traefik-docker-netzwerk>`
+- `TRAEFIK_NETWORK=proxy`
+
+Wichtig:
+
+- `TRAEFIK_NETWORK` muss zum `--providers.docker.network` von Traefik passen.
+- In deiner Konfiguration ist das `proxy`.
+- Mit `docker network ls` findest du die vorhandenen Netzwerke.
 
 ## Erstes Deployment
 
@@ -50,6 +56,15 @@ sudo systemctl enable --now scu-laderaum-planer-update.timer
 ```
 
 Der Timer ruft regelmaessig nur `update-release.sh` auf. Der laufende `nginx`-Container bedient danach automatisch den aktualisierten lokalen Stand aus `runtime/current/`.
+
+## Fehlerbehebung
+
+Wenn `./deploy-latest.sh` mit `network ... declared as external, but could not be found` scheitert:
+
+1. `docker network ls` ausfuehren
+2. das Netzwerk suchen, das dein Traefik nutzt
+3. `TRAEFIK_NETWORK` in `.env` auf genau diesen Namen setzen
+4. `./deploy-latest.sh` erneut starten
 
 ## Wichtige Hinweise
 
