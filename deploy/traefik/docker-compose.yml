@@ -2,7 +2,7 @@ name: scu-laderaum-planer
 
 services:
   scu-laderaum-planer:
-    image: nginx:1.27-alpine
+    image: nginx:stable-alpine
     container_name: scu-laderaum-planer
     restart: unless-stopped
     volumes:
